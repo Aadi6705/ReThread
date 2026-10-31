@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: rethread_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rethread_user
+      POSTGRES_PASSWORD: rethread_password
+      POSTGRES_DB: rethread
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rethread_user -d rethread"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rethread_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      PROJECT_NAME: ReThread API
+      DATABASE_URL: postgresql+asyncpg://rethread_user:rethread_password@db:5432/rethread
+      SYNC_DATABASE_URL: postgresql+psycopg2://rethread_user:rethread_password@db:5432/rethread
+      SECRET_KEY: change_this_to_a_secure_production_secret_key_in_production
+      FRONTEND_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rethread_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

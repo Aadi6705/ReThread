@@ -37,3 +37,9 @@ export interface WishlistItem {
   created_at: string;
   listing: ListingSummary;
 }
+
+export interface SalesSummaryOut {
+  completed_sales: number;
+  total_earned_offline: number | string;
+  products_sold: number;
+}

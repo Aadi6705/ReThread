@@ -10,9 +10,19 @@ from app.models.transaction import Transaction
 from app.models.listing import Listing
 from app.models.user import User
 from app.models.college import College
-from app.schemas.transaction import TransactionCreate, TransactionOut
+from decimal import Decimal
+from app.schemas.transaction import (
+    TransactionCreate,
+    TransactionOut,
+    TransactionScheduleMeetup,
+    TransactionCancel,
+    TransactionDispute,
+    SalesSummaryOut,
+)
 from app.schemas.listing import ListingSummaryOut
 from app.schemas.user import PublicUserOut, StudentProfileOut
+from app.services.notification_service import NotificationService
+from app.core.sanitizer import sanitize_text
 
 
 class TransactionService:
@@ -72,11 +82,26 @@ class TransactionService:
             buyer_id=buyer.id,
             seller_id=listing.seller_id,
             status="requested",
-            buyer_message=data.buyer_message.strip() if data.buyer_message else None,
+            buyer_message=sanitize_text(data.buyer_message) if data.buyer_message else None,
             requested_at=now,
         )
         db.add(transaction)
         await db.commit()
+
+        # Trigger notification to seller
+        buyer_name = buyer.profile.full_name if buyer.profile and buyer.profile.full_name else "A campus student"
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                user_id=listing.seller_id,
+                type="purchase_request",
+                title=f"New Purchase Request for {listing.title}",
+                message=f"{buyer_name} submitted a purchase request for campus meetup.",
+                related_listing_id=listing.id,
+                related_transaction_id=transaction.id,
+            )
+        except Exception:
+            pass
 
         return await TransactionService.get_transaction_by_id(db, transaction.id)
 
@@ -196,6 +221,21 @@ class TransactionService:
         listing.updated_at = now
 
         await db.commit()
+
+        # Trigger notification to buyer
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                user_id=tx.buyer_id,
+                type="request_accepted",
+                title=f"Purchase Request Accepted: {listing.title}",
+                message="The seller accepted your request and reserved the item! Check Messages to coordinate campus meetup.",
+                related_listing_id=listing.id,
+                related_transaction_id=tx.id,
+            )
+        except Exception:
+            pass
+
         return await TransactionService.get_transaction_by_id(db, tx.id)
 
     @staticmethod
@@ -224,7 +264,277 @@ class TransactionService:
         tx.updated_at = now
         await db.commit()
 
+        # Trigger notification to buyer
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                user_id=tx.buyer_id,
+                type="request_rejected",
+                title=f"Request Declined: {tx.listing.title if tx.listing else 'Item'}",
+                message="The seller has declined this purchase request.",
+                related_listing_id=tx.listing_id,
+                related_transaction_id=tx.id,
+            )
+        except Exception:
+            pass
+
         return await TransactionService.get_transaction_by_id(db, tx.id)
+
+    @staticmethod
+    async def schedule_meetup(
+        db: AsyncSession,
+        user: User,
+        transaction_id: uuid.UUID,
+        data: TransactionScheduleMeetup,
+    ) -> Transaction:
+        """Schedule in-person campus meetup location and time."""
+        tx = await TransactionService.get_transaction_by_id(db, transaction_id)
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found.")
+
+        if user.id != tx.buyer_id and user.id != tx.seller_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a participant in this transaction.",
+            )
+
+        if tx.status not in ["accepted", "meetup_scheduled"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot schedule meetup for transaction in '{tx.status}' state.",
+            )
+
+        now = datetime.now(timezone.utc)
+        tx.meetup_location = sanitize_text(data.meetup_location)
+        tx.meetup_datetime = data.meetup_datetime
+        tx.status = "meetup_scheduled"
+        tx.updated_at = now
+        await db.commit()
+
+        # Notify counterparty
+        recipient_id = tx.buyer_id if user.id == tx.seller_id else tx.seller_id
+        try:
+            listing_title = tx.listing.title if tx.listing else "item"
+            dt_str = tx.meetup_datetime.strftime("%d %b at %I:%M %p")
+            await NotificationService.create_notification(
+                db=db,
+                user_id=recipient_id,
+                type="meetup_scheduled",
+                title=f"Meetup Scheduled: {listing_title}",
+                message=f"Meetup set at {tx.meetup_location} on {dt_str}.",
+                related_listing_id=tx.listing_id,
+                related_transaction_id=tx.id,
+            )
+        except Exception:
+            pass
+
+        return await TransactionService.get_transaction_by_id(db, tx.id)
+
+    @staticmethod
+    async def confirm_exchange(
+        db: AsyncSession, user: User, transaction_id: uuid.UUID
+    ) -> Transaction:
+        """
+        Dual-confirmation workflow: both Buyer and Seller must confirm the offline exchange.
+        When both confirm, transaction transitions to 'completed' and listing to 'sold'.
+        """
+        tx = await TransactionService.get_transaction_by_id(db, transaction_id)
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found.")
+
+        if user.id != tx.buyer_id and user.id != tx.seller_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a participant in this transaction.",
+            )
+
+        if tx.status not in ["accepted", "meetup_scheduled"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot confirm exchange in '{tx.status}' state.",
+            )
+
+        now = datetime.now(timezone.utc)
+        if user.id == tx.buyer_id:
+            tx.buyer_confirmed = True
+        elif user.id == tx.seller_id:
+            tx.seller_confirmed = True
+
+        listing_title = tx.listing.title if tx.listing else "item"
+
+        # Check dual confirmation
+        if tx.buyer_confirmed and tx.seller_confirmed:
+            tx.status = "completed"
+            tx.completed_at = now
+
+            # Atomically lock and transition listing to 'sold'
+            stmt = (
+                select(Listing)
+                .where(Listing.id == tx.listing_id)
+                .with_for_update()
+            )
+            listing = (await db.execute(stmt)).scalar_one_or_none()
+            if listing:
+                listing.status = "sold"
+                listing.updated_at = now
+
+            await db.commit()
+
+            # Notify both students of completed exchange
+            try:
+                for uid in [tx.buyer_id, tx.seller_id]:
+                    await NotificationService.create_notification(
+                        db=db,
+                        user_id=uid,
+                        type="exchange_completed",
+                        title=f"Exchange Completed: {listing_title}",
+                        message="Both students confirmed the campus exchange. Circular thrift complete!",
+                        related_listing_id=tx.listing_id,
+                        related_transaction_id=tx.id,
+                    )
+            except Exception:
+                pass
+        else:
+            await db.commit()
+            # Notify the other party that one confirmation has been submitted
+            recipient_id = tx.buyer_id if user.id == tx.seller_id else tx.seller_id
+            user_name = user.profile.full_name if user.profile else "The other student"
+            try:
+                await NotificationService.create_notification(
+                    db=db,
+                    user_id=recipient_id,
+                    type="confirmation_pending",
+                    title=f"Confirmation Received: {listing_title}",
+                    message=f"{user_name} confirmed the exchange. Please submit your confirmation once meetup is done.",
+                    related_listing_id=tx.listing_id,
+                    related_transaction_id=tx.id,
+                )
+            except Exception:
+                pass
+
+        return await TransactionService.get_transaction_by_id(db, tx.id)
+
+    @staticmethod
+    async def cancel_transaction(
+        db: AsyncSession,
+        user: User,
+        transaction_id: uuid.UUID,
+        reason: str,
+    ) -> Transaction:
+        """Cancel an ongoing transaction and release listing back to 'active'."""
+        tx = await TransactionService.get_transaction_by_id(db, transaction_id)
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found.")
+
+        if user.id != tx.buyer_id and user.id != tx.seller_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to cancel this transaction.",
+            )
+
+        if tx.status == "completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Completed exchanges cannot be cancelled.",
+            )
+
+        now = datetime.now(timezone.utc)
+        tx.status = "cancelled"
+        tx.updated_at = now
+
+        # Release listing back to active
+        stmt = (
+            select(Listing)
+            .where(Listing.id == tx.listing_id)
+            .with_for_update()
+        )
+        listing = (await db.execute(stmt)).scalar_one_or_none()
+        if listing and listing.status == "reserved":
+            listing.status = "active"
+            listing.updated_at = now
+
+        await db.commit()
+
+        # Notify counterparty
+        recipient_id = tx.buyer_id if user.id == tx.seller_id else tx.seller_id
+        listing_title = tx.listing.title if tx.listing else "item"
+        try:
+            await NotificationService.create_notification(
+                db=db,
+                user_id=recipient_id,
+                type="transaction_cancelled",
+                title=f"Exchange Cancelled: {listing_title}",
+                message=f"Transaction cancelled: {reason}",
+                related_listing_id=tx.listing_id,
+                related_transaction_id=tx.id,
+            )
+        except Exception:
+            pass
+
+        return await TransactionService.get_transaction_by_id(db, tx.id)
+
+    @staticmethod
+    async def report_dispute(
+        db: AsyncSession,
+        user: User,
+        transaction_id: uuid.UUID,
+        reason: str,
+        description: str,
+    ) -> Transaction:
+        """Flag transaction as disputed for campus review."""
+        tx = await TransactionService.get_transaction_by_id(db, transaction_id)
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found.")
+
+        if user.id != tx.buyer_id and user.id != tx.seller_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a participant in this transaction.",
+            )
+
+        now = datetime.now(timezone.utc)
+        tx.status = "disputed"
+        tx.updated_at = now
+        await db.commit()
+
+        return await TransactionService.get_transaction_by_id(db, tx.id)
+
+    @staticmethod
+    async def get_seller_sales_history(
+        db: AsyncSession, seller_id: uuid.UUID
+    ) -> List[Transaction]:
+        """Fetch all completed transactions for a seller."""
+        stmt = (
+            select(Transaction)
+            .where(Transaction.seller_id == seller_id, Transaction.status == "completed")
+            .options(
+                selectinload(Transaction.listing).selectinload(Listing.images),
+                selectinload(Transaction.listing).selectinload(Listing.category),
+                selectinload(Transaction.listing).selectinload(Listing.college),
+                selectinload(Transaction.buyer).selectinload(User.profile),
+                selectinload(Transaction.buyer).selectinload(User.college),
+            )
+            .order_by(desc(Transaction.completed_at))
+        )
+        res = await db.execute(stmt)
+        return list(res.scalars().all())
+
+    @staticmethod
+    async def get_seller_sales_summary(
+        db: AsyncSession, seller_id: uuid.UUID
+    ) -> SalesSummaryOut:
+        """Compute live sales aggregations directly from the database."""
+        completed_txs = await TransactionService.get_seller_sales_history(db, seller_id)
+        total_earned = sum(
+            (Decimal(str(tx.listing.price)) for tx in completed_txs if tx.listing),
+            Decimal("0.00"),
+        )
+        count = len(completed_txs)
+        return SalesSummaryOut(
+            completed_sales=count,
+            total_earned_offline=total_earned,
+            products_sold=count,
+        )
 
     @staticmethod
     def format_transaction_out(tx: Transaction) -> TransactionOut:

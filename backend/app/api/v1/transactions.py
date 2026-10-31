@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.core.dependencies import get_current_user, get_verified_user
 from app.models.user import User
-from app.schemas.transaction import TransactionCreate, TransactionOut
+from app.schemas.transaction import (
+    TransactionCreate,
+    TransactionOut,
+    TransactionScheduleMeetup,
+    TransactionCancel,
+    TransactionDispute,
+    SalesSummaryOut,
+)
 from app.services.transaction_service import TransactionService
 
 router = APIRouter(prefix="/transactions", tags=["Purchase Requests & Transactions"])
@@ -45,6 +52,25 @@ async def get_my_seller_enquiries(
     """Fetch incoming purchase requests / buyer enquiries for listings owned by the seller."""
     txs = await TransactionService.get_seller_enquiries(db, current_user.id, status_filter)
     return [TransactionService.format_transaction_out(tx) for tx in txs]
+
+
+@router.get("/sales/history", response_model=List[TransactionOut], status_code=status.HTTP_200_OK)
+async def get_my_sales_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch all completed offline exchanges for the authenticated student in Sell mode."""
+    txs = await TransactionService.get_seller_sales_history(db, current_user.id)
+    return [TransactionService.format_transaction_out(tx) for tx in txs]
+
+
+@router.get("/sales/summary", response_model=SalesSummaryOut, status_code=status.HTTP_200_OK)
+async def get_my_sales_summary(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch live-calculated sales aggregate metrics (completed sales, offline earnings in INR)."""
+    return await TransactionService.get_seller_sales_summary(db, current_user.id)
 
 
 @router.get("/{transaction_id}", response_model=TransactionOut, status_code=status.HTTP_200_OK)
@@ -87,4 +113,55 @@ async def reject_purchase_request(
 ):
     """Reject an incoming purchase request. Does not alter listing availability."""
     tx = await TransactionService.reject_request(db, current_user, transaction_id)
+    return TransactionService.format_transaction_out(tx)
+
+
+@router.post("/{transaction_id}/schedule-meetup", response_model=TransactionOut, status_code=status.HTTP_200_OK)
+async def schedule_meetup(
+    transaction_id: uuid.UUID,
+    data: TransactionScheduleMeetup,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Schedule physical campus meetup landmark and time."""
+    tx = await TransactionService.schedule_meetup(db, current_user, transaction_id, data)
+    return TransactionService.format_transaction_out(tx)
+
+
+@router.post("/{transaction_id}/confirm-completion", response_model=TransactionOut, status_code=status.HTTP_200_OK)
+async def confirm_exchange_completion(
+    transaction_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Submit in-person handover confirmation.
+    Requires dual-confirmation from both buyer and seller to finalize transaction to 'completed'
+    and listing to 'sold'.
+    """
+    tx = await TransactionService.confirm_exchange(db, current_user, transaction_id)
+    return TransactionService.format_transaction_out(tx)
+
+
+@router.post("/{transaction_id}/cancel", response_model=TransactionOut, status_code=status.HTTP_200_OK)
+async def cancel_transaction(
+    transaction_id: uuid.UUID,
+    data: TransactionCancel,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel transaction and release item back to 'active'."""
+    tx = await TransactionService.cancel_transaction(db, current_user, transaction_id, data.reason)
+    return TransactionService.format_transaction_out(tx)
+
+
+@router.post("/{transaction_id}/report-dispute", response_model=TransactionOut, status_code=status.HTTP_200_OK)
+async def report_dispute(
+    transaction_id: uuid.UUID,
+    data: TransactionDispute,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Flag exchange as disputed for campus review."""
+    tx = await TransactionService.report_dispute(db, current_user, transaction_id, data.reason, data.description)
     return TransactionService.format_transaction_out(tx)

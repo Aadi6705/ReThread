@@ -34,6 +34,9 @@ class Listing(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(
         String(50), default="draft", index=True, nullable=False
     )  # draft, active, reserved, sold, archived
+    view_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     published_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

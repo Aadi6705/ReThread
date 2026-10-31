@@ -19,6 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=200, auth_requests_per_minute=40)
+
 # Include API v1 endpoints
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

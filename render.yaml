@@ -1,0 +1,41 @@
+services:
+  # Backend API service
+  - type: web
+    name: rethread-api
+    runtime: python
+    buildCommand: "./entrypoint.sh"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PROJECT_NAME
+        value: ReThread Backend API
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rethread-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: https://rethread.campus,http://localhost:3000
+
+  # Frontend Next.js service
+  - type: web
+    name: rethread-frontend
+    runtime: node
+    buildCommand: "npm run build"
+    startCommand: "npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: rethread-api
+          property: host
+
+databases:
+  - name: rethread-postgres
+    databaseName: rethread
+    user: rethread
+    plan: free

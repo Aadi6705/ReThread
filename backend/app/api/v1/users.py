@@ -10,7 +10,9 @@ from app.schemas.user import (
     StudentProfileUpdate,
     PublicUserOut,
 )
+from app.schemas.seller import SellerReputationOut
 from app.services.user_service import UserService
+from app.services.seller_service import SellerService
 
 router = APIRouter(prefix="/users", tags=["Users & Profiles"])
 
@@ -43,3 +45,12 @@ async def get_user_public_profile(
 ):
     """Retrieve sanitized public student profile for other campus members."""
     return await UserService.get_public_profile(db, user_id)
+
+
+@router.get("/{user_id}/reputation", response_model=SellerReputationOut)
+async def get_seller_reputation(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve seller's public campus reputation stats, verified sales, and active listings."""
+    return await SellerService.get_seller_reputation(db, user_id)

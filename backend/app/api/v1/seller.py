@@ -11,12 +11,38 @@ from app.schemas.listing import (
     ListingUpdate,
     ListingDetailOut,
 )
+from app.schemas.seller import (
+    SellerDashboardOut,
+    SellerListingCounts,
+)
 from app.services.listing_service import ListingService
+from app.services.seller_service import SellerService
 
-router = APIRouter(prefix="/seller/listings", tags=["Seller Listings"])
+router = APIRouter(prefix="/seller", tags=["Seller Portal & Listings"])
 
 
-@router.post("", response_model=ListingDetailOut, status_code=status.HTTP_201_CREATED)
+@router.get("/dashboard", response_model=SellerDashboardOut, status_code=status.HTTP_200_OK)
+async def get_seller_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retrieve live aggregated seller performance metrics, listing view stats,
+    enquiries summary, and recent campus buyer activity.
+    """
+    return await SellerService.get_seller_dashboard(db, current_user.id)
+
+
+@router.get("/listings/counts", response_model=SellerListingCounts, status_code=status.HTTP_200_OK)
+async def get_seller_listing_counts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve total count of listings for seller grouped by status."""
+    return await SellerService.get_seller_listing_counts(db, current_user.id)
+
+
+@router.post("/listings", response_model=ListingDetailOut, status_code=status.HTTP_201_CREATED)
 async def create_seller_listing(
     data: ListingCreate,
     current_user: User = Depends(get_verified_user),
@@ -27,7 +53,7 @@ async def create_seller_listing(
     return ListingService.format_listing_detail(listing)
 
 
-@router.get("", response_model=List[ListingDetailOut], status_code=status.HTTP_200_OK)
+@router.get("/listings", response_model=List[ListingDetailOut], status_code=status.HTTP_200_OK)
 async def get_my_seller_listings(
     status_filter: Optional[str] = Query("all", description="all, draft, active, reserved, sold, archived"),
     current_user: User = Depends(get_current_user),
@@ -38,7 +64,7 @@ async def get_my_seller_listings(
     return [ListingService.format_listing_detail(l) for l in listings]
 
 
-@router.get("/{listing_id}", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
+@router.get("/listings/{listing_id}", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
 async def get_my_listing_by_id(
     listing_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -51,7 +77,7 @@ async def get_my_listing_by_id(
     return ListingService.format_listing_detail(listing)
 
 
-@router.patch("/{listing_id}", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
+@router.patch("/listings/{listing_id}", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
 async def update_my_listing(
     listing_id: uuid.UUID,
     data: ListingUpdate,
@@ -63,7 +89,7 @@ async def update_my_listing(
     return ListingService.format_listing_detail(listing)
 
 
-@router.delete("/{listing_id}", status_code=status.HTTP_200_OK)
+@router.delete("/listings/{listing_id}", status_code=status.HTTP_200_OK)
 async def delete_my_draft_listing(
     listing_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
@@ -74,7 +100,7 @@ async def delete_my_draft_listing(
     return {"message": "Draft listing deleted successfully."}
 
 
-@router.post("/{listing_id}/publish", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
+@router.post("/listings/{listing_id}/publish", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
 async def publish_my_listing(
     listing_id: uuid.UUID,
     current_user: User = Depends(get_verified_user),
@@ -85,7 +111,7 @@ async def publish_my_listing(
     return ListingService.format_listing_detail(listing)
 
 
-@router.post("/{listing_id}/archive", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
+@router.post("/listings/{listing_id}/archive", response_model=ListingDetailOut, status_code=status.HTTP_200_OK)
 async def archive_my_listing(
     listing_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

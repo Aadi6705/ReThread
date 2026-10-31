@@ -31,6 +31,8 @@ export interface ListingSummary {
   condition: 'like_new' | 'excellent' | 'good' | 'fair';
   brand?: string | null;
   status: 'draft' | 'active' | 'reserved' | 'sold' | 'archived';
+  view_count?: number;
+  enquiries_count?: number;
   primary_image_url?: string | null;
   campus_name: string;
   college_name: string;
@@ -51,6 +53,8 @@ export interface ListingDetail {
   condition: 'like_new' | 'excellent' | 'good' | 'fair';
   brand?: string | null;
   status: 'draft' | 'active' | 'reserved' | 'sold' | 'archived';
+  view_count?: number;
+  enquiries_count?: number;
   created_at: string;
   updated_at: string;
   published_at?: string | null;

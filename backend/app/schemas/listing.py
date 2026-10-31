@@ -62,6 +62,8 @@ class ListingSummaryOut(BaseModel):
     condition: str
     brand: Optional[str] = None
     status: str
+    view_count: int = 0
+    enquiries_count: int = 0
     primary_image_url: Optional[str] = None
     campus_name: str
     college_name: str
@@ -84,6 +86,8 @@ class ListingDetailOut(BaseModel):
     condition: str
     brand: Optional[str] = None
     status: str
+    view_count: int = 0
+    enquiries_count: int = 0
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None

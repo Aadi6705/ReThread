@@ -23,6 +23,7 @@ from app.schemas.listing import (
 from app.schemas.category import CategoryOut
 from app.schemas.college import CollegeOut
 from app.schemas.user import PublicUserOut, StudentProfileOut
+from app.core.sanitizer import sanitize_text
 
 
 class ListingService:
@@ -62,12 +63,12 @@ class ListingService:
             seller_id=seller.id,
             college_id=seller.college_id,
             category_id=category.id,
-            title=data.title.strip(),
-            description=data.description.strip(),
+            title=sanitize_text(data.title),
+            description=sanitize_text(data.description),
             price=data.price,
             original_price=data.original_price,
             condition=data.condition,
-            brand=data.brand.strip() if data.brand else None,
+            brand=sanitize_text(data.brand) if data.brand else None,
             status=data.status,
             published_at=now if data.status == "active" else None,
         )
@@ -155,9 +156,9 @@ class ListingService:
             listing.category_id = data.category_id
 
         if data.title is not None:
-            listing.title = data.title.strip()
+            listing.title = sanitize_text(data.title)
         if data.description is not None:
-            listing.description = data.description.strip()
+            listing.description = sanitize_text(data.description)
         if data.price is not None:
             listing.price = data.price
         if data.original_price is not None:
@@ -165,7 +166,7 @@ class ListingService:
         if data.condition is not None:
             listing.condition = data.condition
         if data.brand is not None:
-            listing.brand = data.brand.strip()
+            listing.brand = sanitize_text(data.brand)
 
         if data.images is not None:
             # Replace images
@@ -326,6 +327,8 @@ class ListingService:
                     condition=l.condition,
                     brand=l.brand,
                     status=l.status,
+                    view_count=getattr(l, "view_count", 0) or 0,
+                    enquiries_count=0,
                     primary_image_url=primary_img,
                     campus_name=l.college.campus_name,
                     college_name=l.college.name,
@@ -346,7 +349,7 @@ class ListingService:
         )
 
     @staticmethod
-    def format_listing_detail(listing: Listing) -> ListingDetailOut:
+    def format_listing_detail(listing: Listing, enquiries_count: int = 0) -> ListingDetailOut:
         """Format ORM model into typed detail schema."""
         category_out = CategoryOut.model_validate(listing.category)
         college_out = CollegeOut.model_validate(listing.college)
@@ -380,6 +383,8 @@ class ListingService:
             condition=listing.condition,
             brand=listing.brand,
             status=listing.status,
+            view_count=getattr(listing, "view_count", 0) or 0,
+            enquiries_count=enquiries_count,
             created_at=listing.created_at,
             updated_at=listing.updated_at,
             published_at=listing.published_at,

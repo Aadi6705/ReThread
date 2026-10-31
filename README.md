@@ -99,3 +99,51 @@ cp .env.local.example .env.local
 npm run dev
 ```
 - Open `http://localhost:3000` to access ReThread.
+
+---
+
+## Testing & Quality Assurance
+
+### Backend Automated Test Suite (18 Tests)
+```bash
+cd backend
+PYTHONPATH=. ./venv/bin/pytest tests/ -v
+```
+Covers:
+- Email domain validation (`.ac.in`, `.edu`) & authentication lifecycle
+- Catalog faceted search, filters, and image galleries
+- Wishlist operations and atomic purchase requests (`SELECT FOR UPDATE`)
+- Real-time chat history & persistent notifications
+- Meetup coordination and dual-confirmation handovers
+- Concurrency control, double-selling prevention, and permission boundaries
+- Security headers (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`) and XSS sanitization
+
+### Frontend Vitest Suite
+```bash
+cd frontend
+npm test
+```
+
+### Production Build Verification
+```bash
+cd frontend
+npm run build
+```
+Compiles all 21 routes cleanly with 0 TypeScript or lint errors.
+
+---
+
+## Production Deployment & Containerization
+
+### Run Full Stack with Docker Compose
+```bash
+docker compose up --build
+```
+Orchestrates:
+- `db`: PostgreSQL 16 container with persistent volumes and healthchecks
+- `backend`: FastAPI Python 3.12 container with automated Alembic migration runner
+- `frontend`: Next.js 16 container with standalone production runtime
+
+### Cloud Deployment
+- **Backend**: Ready for Render / Railway using `render.yaml` or `backend/Dockerfile`.
+- **Frontend**: Ready for Vercel using `frontend/vercel.json` or Docker.

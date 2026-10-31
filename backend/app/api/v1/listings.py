@@ -63,4 +63,6 @@ async def get_listing_detail(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product listing not found or is currently unavailable.",
         )
+    listing.view_count = (listing.view_count or 0) + 1
+    await db.commit()
     return ListingService.format_listing_detail(listing)

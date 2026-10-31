@@ -6,6 +6,7 @@ import { apiClient } from '@/lib/api/client';
 import { useModeStore } from '@/store/useModeStore';
 import { useAuth } from '@/hooks/useAuth';
 import { ModeSwitcher } from '@/components/navigation/ModeSwitcher';
+import { Header } from '@/components/navigation/Header';
 import { ListingSummary, PaginatedListings } from '@/types/marketplace';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import {
@@ -75,123 +76,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#f5f3ee] text-[#191c1a] flex flex-col">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 bg-[#f5f3ee]/90 backdrop-blur-md border-b border-[#e2ded6]">
-        <div className="max-w-[1312px] mx-auto px-6 h-18 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2">
-              <span className="font-serif text-2xl font-bold tracking-tight text-[#1a3a2a]">
-                ReThread
-              </span>
-              <span className="text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-[#e8f0eb] text-[#1a3a2a] border border-[#d8e5dc]">
-                Campus Edition
-              </span>
-            </Link>
-
-            {/* Mode-specific Navigation */}
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-              {mode === 'buy' ? (
-                <>
-                  <Link
-                    href="/discover"
-                    className="flex items-center gap-1.5 text-[#1a3a2a] font-semibold hover:text-[#132c1f]"
-                  >
-                    <Compass className="w-4 h-4" /> Discover
-                  </Link>
-                  <Link
-                    href="/explore"
-                    className="text-[#5c645d] hover:text-[#1a3a2a]"
-                  >
-                    Explore
-                  </Link>
-                  <span className="flex items-center gap-1.5 text-[#5c645d] hover:text-[#1a3a2a] cursor-pointer">
-                    <Heart className="w-4 h-4" /> Wishlist
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="flex items-center gap-1.5 text-[#1a3a2a] font-semibold cursor-pointer">
-                    <LayoutDashboard className="w-4 h-4" /> Dashboard
-                  </span>
-                  <span className="text-[#5c645d] hover:text-[#1a3a2a] cursor-pointer">
-                    My Listings
-                  </span>
-                  <Link
-                    href="/listings/create"
-                    className="flex items-center gap-1.5 text-[#5c645d] hover:text-[#1a3a2a]"
-                  >
-                    <PlusCircle className="w-4 h-4" /> Create Listing
-                  </Link>
-                  <span className="text-[#5c645d] hover:text-[#1a3a2a] cursor-pointer">
-                    Buyer Enquiries
-                  </span>
-                  <span className="text-[#5c645d] hover:text-[#1a3a2a] cursor-pointer">
-                    Sales History
-                  </span>
-                </>
-              )}
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <ModeSwitcher />
-
-            {isAuthenticated && user ? (
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="p-2 rounded-full text-[#5c645d] hover:text-[#1a3a2a] hover:bg-[#edeae2] transition"
-                  aria-label="Messages"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                </button>
-
-                <div className="flex items-center gap-2 pl-2 border-l border-[#e2ded6]">
-                  <div
-                    className="h-8 w-8 rounded-full bg-[#1a3a2a] text-white flex items-center justify-center text-xs font-bold shadow-sm"
-                    title={user.profile?.full_name || user.email}
-                  >
-                    {getInitials(user.profile?.full_name)}
-                  </div>
-                  <div className="hidden lg:block text-left text-xs">
-                    <p className="font-semibold text-[#191c1a] leading-tight">
-                      {user.profile?.full_name || 'Student'}
-                    </p>
-                    <p className="text-[10px] text-[#5c645d]">
-                      {user.college?.campus_name || 'Campus Member'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => logout()}
-                    className="p-1.5 text-[#8a938c] hover:text-rose-600 transition"
-                    title="Log Out"
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/login"
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-[#1a3a2a] hover:bg-[#edeae2] transition"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Log In</span>
-                </Link>
-                <Link
-                  href="/register"
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#1a3a2a] text-white hover:bg-[#132c1f] transition shadow-sm"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>Register</span>
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1312px] w-full mx-auto px-6 py-10 space-y-12">
