@@ -41,7 +41,7 @@ async def test_register_and_verify_student_workflow():
             assert reg_res.status_code == 201
             reg_data = reg_res.json()
             assert reg_data["email"] == unique_email
-            assert reg_data["is_email_verified"] is False
+            assert reg_data["is_email_verified"] is True
             assert reg_data["profile"]["full_name"] == "Aarav Sharma"
 
         # 2. Login
@@ -85,16 +85,29 @@ async def test_register_and_verify_student_workflow():
 
 
 @pytest.mark.asyncio
-async def test_invalid_email_domain_rejected():
+async def test_any_email_domain_accepted():
+    """Verify that any personal or campus email (e.g., Gmail, Outlook, Yahoo) can register and log in."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
-        res = await client.post(
+        gmail_email = "student.demo@gmail.com"
+        reg_res = await client.post(
             "/auth/register",
             json={
-                "email": "intruder@gmail.com",
+                "email": gmail_email,
                 "password": "Password123!",
-                "full_name": "Intruder",
+                "full_name": "Demo Student",
             },
         )
-        assert res.status_code == 400
-        assert "not recognized as an eligible college domain" in res.json()["detail"]
+        if reg_res.status_code == 400 and "already exists" in reg_res.text:
+            pass
+        else:
+            assert reg_res.status_code == 201
+            assert reg_res.json()["email"] == gmail_email
+
+        # Login with Gmail ID
+        login_res = await client.post(
+            "/auth/login",
+            json={"email": gmail_email, "password": "Password123!"},
+        )
+        assert login_res.status_code == 200
+        assert "access_token" in login_res.json()

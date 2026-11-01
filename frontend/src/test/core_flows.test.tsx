@@ -16,17 +16,18 @@ describe('ReThread Currency & Pricing Specifications', () => {
     expect(formatPrice(0)).toBe('₹0');
   });
 
-  it('validates strictly collegiate email domains (.ac.in and .edu)', () => {
-    const isValidCampusEmail = (email: string) => {
-      const lower = email.trim().toLowerCase();
-      return lower.endsWith('.ac.in') || lower.endsWith('.edu');
+  it('accepts any valid email format (Gmail, Yahoo, Outlook, and university domains)', () => {
+    const isValidEmail = (email: string) => {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return re.test(email.trim());
     };
 
-    expect(isValidCampusEmail('student@iitd.ac.in')).toBe(true);
-    expect(isValidCampusEmail('aarav.sharma@bits-pilani.ac.in')).toBe(true);
-    expect(isValidCampusEmail('student@stanford.edu')).toBe(true);
-    expect(isValidCampusEmail('hacker@gmail.com')).toBe(false);
-    expect(isValidCampusEmail('buyer@yahoo.com')).toBe(false);
+    expect(isValidEmail('student@iitd.ac.in')).toBe(true);
+    expect(isValidEmail('aarav.sharma@bits-pilani.ac.in')).toBe(true);
+    expect(isValidEmail('student@stanford.edu')).toBe(true);
+    expect(isValidEmail('student@gmail.com')).toBe(true);
+    expect(isValidEmail('buyer@yahoo.com')).toBe(true);
+    expect(isValidEmail('invalid-email')).toBe(false);
   });
 });
 

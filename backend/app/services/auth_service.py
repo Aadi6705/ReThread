@@ -33,24 +33,31 @@ class AuthService:
         email = data.email.strip().lower()
         domain = email.split("@")[-1]
 
-        # 1. Verify college email domain
+        # 1. Match college by domain if available, or fallback to default campus community
         college_stmt = select(College).where(College.email_domain == domain)
         college_res = await db.execute(college_stmt)
         college = college_res.scalar_one_or_none()
 
         if not college:
-            # Fallback for academic domains (e.g., any .ac.in or .edu)
-            if domain.endswith(".ac.in") or domain.endswith(".edu"):
-                # Assign to generic or create college stub
-                fallback_stmt = select(College).where(College.email_domain == "campus.edu")
-                fallback_res = await db.execute(fallback_stmt)
-                college = fallback_res.scalar_one_or_none()
-            
+            # Fallback to campus demo or first available college
+            fallback_stmt = select(College).where(College.email_domain == "campus.edu")
+            fallback_res = await db.execute(fallback_stmt)
+            college = fallback_res.scalar_one_or_none()
+
             if not college:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Email domain '@{domain}' is not recognized as an eligible college domain. Please use your official university email.",
-                )
+                # Any first college from DB or create a campus stub
+                first_col = (await db.execute(select(College).limit(1))).scalar_one_or_none()
+                if first_col:
+                    college = first_col
+                else:
+                    college = College(
+                        name="Campus Community",
+                        email_domain="campus.edu",
+                        campus_name="University Campus",
+                        location="Campus City",
+                    )
+                    db.add(college)
+                    await db.flush()
 
         # 2. Check for existing email
         existing_stmt = select(User).where(User.email == email)
@@ -58,15 +65,15 @@ class AuthService:
         if existing_res.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this student email already exists. Please log in.",
+                detail="An account with this email already exists. Please log in.",
             )
 
-        # 3. Create User & Profile
+        # 3. Create User & Profile (verified by default to enable immediate marketplace access)
         new_user = User(
             college_id=college.id,
             email=email,
             password_hash=get_password_hash(data.password),
-            is_email_verified=False,
+            is_email_verified=True,
             account_status="active",
         )
         db.add(new_user)
@@ -184,7 +191,7 @@ class AuthService:
         if not user or not verify_password(data.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect college email or password.",
+                detail="Incorrect email or password.",
             )
 
         if user.account_status != "active":

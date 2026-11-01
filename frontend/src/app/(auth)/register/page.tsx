@@ -7,7 +7,7 @@ import { ShieldCheck, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, login } = useAuth();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -32,7 +32,9 @@ export default function RegisterPage() {
         course,
         academic_year: academicYear,
       });
-      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      // Automatically log in with the new credentials
+      await login(email, password);
+      router.push('/');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check your details.');
     } finally {
@@ -52,7 +54,7 @@ export default function RegisterPage() {
           Join your campus thrift network
         </h2>
         <p className="mt-1 text-sm text-[#5c645d]">
-          Create a student account with your verified university email
+          Create an account with any email address
         </p>
       </div>
 
@@ -89,19 +91,19 @@ export default function RegisterPage() {
                 htmlFor="email"
                 className="block text-xs font-semibold uppercase tracking-wider text-[#5c645d] mb-1.5"
               >
-                College Email Address
+                Email Address
               </label>
               <input
                 id="email"
                 type="email"
                 required
-                placeholder="student@iitd.ac.in"
+                placeholder="name@gmail.com, student@iitd.ac.in, etc."
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-[#e2ded6] bg-[#fdfdfc] text-[#191c1a] text-sm placeholder:text-[#8a938c] focus:outline-none focus:border-[#1a3a2a] focus:ring-2 focus:ring-[#1a3a2a]/10 transition"
               />
               <p className="mt-1 text-[11px] text-[#8a938c]">
-                Accepted domains: .ac.in, .edu, or recognized college domains
+                You can use any email address (e.g. Gmail, Outlook, or university email)
               </p>
             </div>
 
