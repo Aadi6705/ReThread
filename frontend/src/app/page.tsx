@@ -5,57 +5,35 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api/client';
 import { useModeStore } from '@/store/useModeStore';
 import { useAuth } from '@/hooks/useAuth';
-import { ModeSwitcher } from '@/components/navigation/ModeSwitcher';
 import { Header } from '@/components/navigation/Header';
 import { ListingSummary, PaginatedListings } from '@/types/marketplace';
 import { ProductGrid } from '@/components/products/ProductGrid';
 import {
-  CheckCircle2,
-  AlertCircle,
-  Database,
   Sparkles,
   ArrowRight,
   Compass,
-  Heart,
-  MessageSquare,
-  LayoutDashboard,
   PlusCircle,
   ShieldCheck,
-  LogOut,
-  LogIn,
-  UserPlus,
   Building,
   GraduationCap,
-  Package,
+  MapPin,
+  CircleDollarSign,
+  Users,
 } from 'lucide-react';
-
-interface HealthData {
-  status: string;
-  app_name: string;
-  environment: string;
-  database: string;
-  timestamp: string;
-  version: string;
-}
 
 export default function HomePage() {
   const { mode } = useModeStore();
-  const { user, isAuthenticated, logout } = useAuth();
-  const [health, setHealth] = useState<HealthData | null>(null);
+  const { user, isAuthenticated } = useAuth();
   const [featuredListings, setFeaturedListings] = useState<ListingSummary[]>([]);
   const [loadingListings, setLoadingListings] = useState<boolean>(true);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const [healthRes, listingsRes] = await Promise.all([
-          apiClient.get<HealthData>('/health'),
-          apiClient.get<PaginatedListings>('/listings?limit=8'),
-        ]);
-        setHealth(healthRes);
+        const listingsRes = await apiClient.get<PaginatedListings>('/listings?limit=8');
         setFeaturedListings(listingsRes.items);
       } catch (err) {
-        console.error('Failed to load initial data:', err);
+        console.error('Failed to load listings:', err);
       } finally {
         setLoadingListings(false);
       }
@@ -127,7 +105,7 @@ export default function HomePage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-[#e2ded6]">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e8f0eb] text-[#1a3a2a] text-xs font-semibold mb-3 border border-[#d8e5dc]">
-              <Sparkles className="w-3.5 h-3.5" /> Phase 3 Marketplace Live
+              <Sparkles className="w-3.5 h-3.5" /> Verified Campus Community
             </div>
             <h1 className="font-serif text-4xl md:text-5xl font-bold text-[#1a3a2a] tracking-tight mb-3">
               Campus Thrift & Pre-Owned Essentials
@@ -176,43 +154,47 @@ export default function HomePage() {
           <ProductGrid products={featuredListings} loading={loadingListings} />
         </section>
 
-        {/* Phase 3 Deliverables Checklist Card */}
-        <div className="bg-white rounded-3xl border border-[#e2ded6] p-8 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-serif text-xl font-bold text-[#1a3a2a]">
-                Phase 3 Marketplace & Product Listings Deliverables
-              </h3>
-              <p className="text-xs text-[#5c645d] mt-1">
-                Connected end-to-end with persistent PostgreSQL database and FastAPI backend.
-              </p>
-            </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
-              PHASE 3 ACTIVE
-            </span>
+        {/* Campus Marketplace Trust & Value Card */}
+        <div className="bg-white rounded-3xl border border-[#e2ded6] p-8 shadow-xs">
+          <div className="mb-6">
+            <h3 className="font-serif text-2xl font-bold text-[#1a3a2a]">
+              How ReThread Works on Campus
+            </h3>
+            <p className="text-xs text-[#5c645d] mt-1">
+              A transparent, circular economy built entirely for students within your university.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-4 border-t border-[#edeae2]">
-            {[
-              { label: 'Category API (GET /api/v1/categories) with 8 active categories', done: true },
-              { label: 'Marketplace Search & Faceted Filter API (GET /api/v1/listings)', done: true },
-              { label: 'Product Detail API (GET /api/v1/listings/{id}) with seller & multi-image gallery', done: true },
-              { label: 'Cloudinary Image Upload with 5MB limit & 5-photo enforcement', done: true },
-              { label: 'Seller Listing CRUD API (POST, PATCH, DELETE, PUBLISH, ARCHIVE)', done: true },
-              { label: 'Discover Hub (/discover) adhering to Figma design s4', done: true },
-              { label: 'Explore & Faceted Search (/explore) adhering to Figma design s5', done: true },
-              { label: 'Product Details view (/product/[id]) adhering to Figma design s6', done: true },
-              { label: '4-Step Seller Wizard (/listings/create) adhering to s13, s14, s15', done: true },
-              { label: 'Automated Pytest Suite passing with 7/7 tests', done: true },
-            ].map((item, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-3 p-3 rounded-xl bg-[#f5f3ee] border border-[#e2ded6]"
-              >
-                <CheckCircle2 className="w-4 h-4 text-[#1a3a2a] shrink-0" />
-                <span className="text-xs font-semibold text-[#191c1a]">{item.label}</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+            <div className="p-5 rounded-2xl bg-[#f5f3ee] border border-[#e2ded6] space-y-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#1a3a2a] text-white flex items-center justify-center">
+                <Users className="w-4 h-4" />
               </div>
-            ))}
+              <h4 className="font-semibold text-sm text-[#191c1a]">Student Verified Only</h4>
+              <p className="text-xs text-[#5c645d] leading-relaxed">
+                Sign in with your official college domain email (.ac.in). Every buyer and seller is an authenticated campus peer.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#f5f3ee] border border-[#e2ded6] space-y-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#1a3a2a] text-white flex items-center justify-center">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <h4 className="font-semibold text-sm text-[#191c1a]">Safe Campus Meetups</h4>
+              <p className="text-xs text-[#5c645d] leading-relaxed">
+                Coordinate meetups at designated campus landmarks like the Student Activity Centre, Library Gate, or Quad.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-[#f5f3ee] border border-[#e2ded6] space-y-2.5">
+              <div className="w-9 h-9 rounded-xl bg-[#1a3a2a] text-white flex items-center justify-center">
+                <CircleDollarSign className="w-4 h-4" />
+              </div>
+              <h4 className="font-semibold text-sm text-[#191c1a]">Zero Fees & Direct Pay</h4>
+              <p className="text-xs text-[#5c645d] leading-relaxed">
+                Pay directly in person via UPI or cash during physical handover. No platform commission, no delivery charges.
+              </p>
+            </div>
           </div>
         </div>
       </main>
