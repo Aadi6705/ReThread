@@ -195,7 +195,7 @@ SAMPLE_LISTINGS = [
 ]
 
 
-async def seed_data():
+async def seed_data(target_email: str = None):
     async with AsyncSessionLocal() as session:
         # 1. Seed Colleges
         colleges = {}
@@ -223,9 +223,9 @@ async def seed_data():
                 logger.info(f"Seeded Category: {cat_data['name']}")
             categories[cat_data["slug"]] = cat
 
-        # 3. Seed Demo Verified Seller Student
+        # 3. Determine Seller Student
         demo_college = colleges.get("iitd.ac.in")
-        seller_email = "rohit.mehta@iitd.ac.in"
+        seller_email = target_email or "rohit.mehta@iitd.ac.in"
         stmt = select(User).where(User.email == seller_email)
         res = await session.execute(stmt)
         seller = res.scalar_one_or_none()
@@ -242,7 +242,7 @@ async def seed_data():
 
             profile = StudentProfile(
                 user_id=seller.id,
-                full_name="Rohit Mehta",
+                full_name="Rohit Mehta" if seller_email == "rohit.mehta@iitd.ac.in" else "Campus Seller",
                 department="Mechanical Engineering",
                 course="B.Tech",
                 academic_year="Final Year",
@@ -250,21 +250,22 @@ async def seed_data():
             )
             session.add(profile)
             await session.flush()
-            logger.info("Seeded Demo Seller: Rohit Mehta (IIT Delhi)")
+            logger.info(f"Created Seller: {seller_email}")
 
-        # 4. Seed Sample Listings
+        # 4. Seed Sample Listings for this seller
         now = datetime.now(timezone.utc)
+        college_id = seller.college_id or demo_college.id
         for item in SAMPLE_LISTINGS:
             cat = categories.get(item["category_slug"])
             if not cat:
                 continue
 
-            stmt = select(Listing).where(Listing.title == item["title"])
+            stmt = select(Listing).where(Listing.title == item["title"], Listing.seller_id == seller.id)
             res = await session.execute(stmt)
             if not res.scalar_one_or_none():
                 listing = Listing(
                     seller_id=seller.id,
-                    college_id=demo_college.id,
+                    college_id=college_id,
                     category_id=cat.id,
                     title=item["title"],
                     description=item["description"],
@@ -273,6 +274,7 @@ async def seed_data():
                     condition=item["condition"],
                     brand=item["brand"],
                     status="active",
+                    view_count=0,
                     published_at=now,
                 )
                 session.add(listing)
@@ -287,11 +289,13 @@ async def seed_data():
                     )
                     session.add(img)
 
-                logger.info(f"Seeded Listing: {item['title']} (₹ {item['price']})")
+                logger.info(f"Seeded Listing for {seller.email}: {item['title']} (₹ {item['price']})")
 
         await session.commit()
-        logger.info("Marketplace seed completed successfully.")
+        logger.info(f"Marketplace seed for {seller.email} completed successfully.")
 
 
 if __name__ == "__main__":
-    asyncio.run(seed_data())
+    import sys
+    target = sys.argv[1] if len(sys.argv) > 1 else None
+    asyncio.run(seed_data(target_email=target))
