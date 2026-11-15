@@ -1,13 +1,24 @@
+-- ==============================================================================
+-- ReThread Campus Marketplace — Clean Supabase Database Setup
+-- Run this script in the Supabase Dashboard SQL Editor.
+-- ==============================================================================
+
+-- Cleanly reset public schema to eliminate any partial run conflicts
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+
 BEGIN;
 
-CREATE TABLE alembic_version (
+CREATE TABLE IF NOT EXISTS alembic_version (
     version_num VARCHAR(32) NOT NULL, 
     CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
 );
 
 -- Running upgrade  -> c367a7a8c2ae
 
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
     id UUID NOT NULL, 
     name VARCHAR(100) NOT NULL, 
     slug VARCHAR(100) NOT NULL, 
@@ -18,9 +29,9 @@ CREATE TABLE categories (
     CONSTRAINT categories_name_key UNIQUE (name)
 );
 
-CREATE UNIQUE INDEX categories_slug_idx ON categories (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS categories_slug_idx ON categories (slug);
 
-CREATE TABLE colleges (
+CREATE TABLE IF NOT EXISTS colleges (
     id UUID NOT NULL, 
     name VARCHAR(255) NOT NULL, 
     email_domain VARCHAR(100) NOT NULL, 
@@ -30,9 +41,9 @@ CREATE TABLE colleges (
     CONSTRAINT colleges_pkey PRIMARY KEY (id)
 );
 
-CREATE UNIQUE INDEX colleges_email_domain_idx ON colleges (email_domain);
+CREATE UNIQUE INDEX IF NOT EXISTS colleges_email_domain_idx ON colleges (email_domain);
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID NOT NULL, 
     college_id UUID NOT NULL, 
     email VARCHAR(255) NOT NULL, 
@@ -46,11 +57,11 @@ CREATE TABLE users (
     CONSTRAINT users_college_id_fkey FOREIGN KEY(college_id) REFERENCES colleges (id) ON DELETE RESTRICT
 );
 
-CREATE INDEX users_college_id_idx ON users (college_id);
+CREATE INDEX IF NOT EXISTS users_college_id_idx ON users (college_id);
 
-CREATE UNIQUE INDEX users_email_idx ON users (email);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users (email);
 
-CREATE TABLE email_verification_tokens (
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id UUID NOT NULL, 
     user_id UUID NOT NULL, 
     token_hash VARCHAR(255) NOT NULL, 
@@ -61,11 +72,11 @@ CREATE TABLE email_verification_tokens (
     CONSTRAINT email_verification_tokens_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX email_verification_tokens_token_hash_idx ON email_verification_tokens (token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS email_verification_tokens_token_hash_idx ON email_verification_tokens (token_hash);
 
-CREATE INDEX email_verification_tokens_user_id_idx ON email_verification_tokens (user_id);
+CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx ON email_verification_tokens (user_id);
 
-CREATE TABLE listings (
+CREATE TABLE IF NOT EXISTS listings (
     id UUID NOT NULL, 
     seller_id UUID NOT NULL, 
     college_id UUID NOT NULL, 
@@ -86,21 +97,21 @@ CREATE TABLE listings (
     CONSTRAINT listings_seller_id_fkey FOREIGN KEY(seller_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_listings_category_price ON listings (category_id, price);
+CREATE INDEX IF NOT EXISTS ix_listings_category_price ON listings (category_id, price);
 
-CREATE INDEX ix_listings_status_college ON listings (status, college_id);
+CREATE INDEX IF NOT EXISTS ix_listings_status_college ON listings (status, college_id);
 
-CREATE INDEX listings_category_id_idx ON listings (category_id);
+CREATE INDEX IF NOT EXISTS listings_category_id_idx ON listings (category_id);
 
-CREATE INDEX listings_college_id_idx ON listings (college_id);
+CREATE INDEX IF NOT EXISTS listings_college_id_idx ON listings (college_id);
 
-CREATE INDEX listings_seller_id_idx ON listings (seller_id);
+CREATE INDEX IF NOT EXISTS listings_seller_id_idx ON listings (seller_id);
 
-CREATE INDEX listings_status_idx ON listings (status);
+CREATE INDEX IF NOT EXISTS listings_status_idx ON listings (status);
 
-CREATE INDEX listings_title_idx ON listings (title);
+CREATE INDEX IF NOT EXISTS listings_title_idx ON listings (title);
 
-CREATE TABLE student_profiles (
+CREATE TABLE IF NOT EXISTS student_profiles (
     id UUID NOT NULL, 
     user_id UUID NOT NULL, 
     full_name VARCHAR(100) NOT NULL, 
@@ -115,9 +126,9 @@ CREATE TABLE student_profiles (
     CONSTRAINT student_profiles_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX student_profiles_user_id_idx ON student_profiles (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS student_profiles_user_id_idx ON student_profiles (user_id);
 
-CREATE TABLE listing_images (
+CREATE TABLE IF NOT EXISTS listing_images (
     id UUID NOT NULL, 
     listing_id UUID NOT NULL, 
     image_url VARCHAR(500) NOT NULL, 
@@ -128,9 +139,9 @@ CREATE TABLE listing_images (
     CONSTRAINT listing_images_listing_id_fkey FOREIGN KEY(listing_id) REFERENCES listings (id) ON DELETE CASCADE
 );
 
-CREATE INDEX listing_images_listing_id_idx ON listing_images (listing_id);
+CREATE INDEX IF NOT EXISTS listing_images_listing_id_idx ON listing_images (listing_id);
 
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     id UUID NOT NULL, 
     listing_id UUID NOT NULL, 
     buyer_id UUID NOT NULL, 
@@ -151,19 +162,19 @@ CREATE TABLE transactions (
     CONSTRAINT transactions_seller_id_fkey FOREIGN KEY(seller_id) REFERENCES users (id) ON DELETE RESTRICT
 );
 
-CREATE INDEX ix_transactions_buyer_status ON transactions (buyer_id, status);
+CREATE INDEX IF NOT EXISTS ix_transactions_buyer_status ON transactions (buyer_id, status);
 
-CREATE INDEX ix_transactions_seller_status ON transactions (seller_id, status);
+CREATE INDEX IF NOT EXISTS ix_transactions_seller_status ON transactions (seller_id, status);
 
-CREATE INDEX transactions_buyer_id_idx ON transactions (buyer_id);
+CREATE INDEX IF NOT EXISTS transactions_buyer_id_idx ON transactions (buyer_id);
 
-CREATE INDEX transactions_listing_id_idx ON transactions (listing_id);
+CREATE INDEX IF NOT EXISTS transactions_listing_id_idx ON transactions (listing_id);
 
-CREATE INDEX transactions_seller_id_idx ON transactions (seller_id);
+CREATE INDEX IF NOT EXISTS transactions_seller_id_idx ON transactions (seller_id);
 
-CREATE INDEX transactions_status_idx ON transactions (status);
+CREATE INDEX IF NOT EXISTS transactions_status_idx ON transactions (status);
 
-CREATE TABLE wishlists (
+CREATE TABLE IF NOT EXISTS wishlists (
     id UUID NOT NULL, 
     user_id UUID NOT NULL, 
     listing_id UUID NOT NULL, 
@@ -174,11 +185,11 @@ CREATE TABLE wishlists (
     CONSTRAINT uq_user_listing_wishlist UNIQUE (user_id, listing_id)
 );
 
-CREATE INDEX wishlists_listing_id_idx ON wishlists (listing_id);
+CREATE INDEX IF NOT EXISTS wishlists_listing_id_idx ON wishlists (listing_id);
 
-CREATE INDEX wishlists_user_id_idx ON wishlists (user_id);
+CREATE INDEX IF NOT EXISTS wishlists_user_id_idx ON wishlists (user_id);
 
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id UUID NOT NULL, 
     listing_id UUID, 
     transaction_id UUID, 
@@ -189,11 +200,11 @@ CREATE TABLE conversations (
     CONSTRAINT conversations_transaction_id_fkey FOREIGN KEY(transaction_id) REFERENCES transactions (id) ON DELETE SET NULL
 );
 
-CREATE INDEX conversations_listing_id_idx ON conversations (listing_id);
+CREATE INDEX IF NOT EXISTS conversations_listing_id_idx ON conversations (listing_id);
 
-CREATE INDEX conversations_transaction_id_idx ON conversations (transaction_id);
+CREATE INDEX IF NOT EXISTS conversations_transaction_id_idx ON conversations (transaction_id);
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID NOT NULL, 
     user_id UUID NOT NULL, 
     type VARCHAR(100) NOT NULL, 
@@ -209,15 +220,15 @@ CREATE TABLE notifications (
     CONSTRAINT notifications_user_id_fkey FOREIGN KEY(user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_notifications_user_unread ON notifications (user_id, is_read);
+CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications (user_id, is_read);
 
-CREATE INDEX notifications_created_at_idx ON notifications (created_at);
+CREATE INDEX IF NOT EXISTS notifications_created_at_idx ON notifications (created_at);
 
-CREATE INDEX notifications_is_read_idx ON notifications (is_read);
+CREATE INDEX IF NOT EXISTS notifications_is_read_idx ON notifications (is_read);
 
-CREATE INDEX notifications_user_id_idx ON notifications (user_id);
+CREATE INDEX IF NOT EXISTS notifications_user_id_idx ON notifications (user_id);
 
-CREATE TABLE conversation_participants (
+CREATE TABLE IF NOT EXISTS conversation_participants (
     id UUID NOT NULL, 
     conversation_id UUID NOT NULL, 
     user_id UUID NOT NULL, 
@@ -229,11 +240,11 @@ CREATE TABLE conversation_participants (
     CONSTRAINT uq_conversation_user_participant UNIQUE (conversation_id, user_id)
 );
 
-CREATE INDEX conversation_participants_conversation_id_idx ON conversation_participants (conversation_id);
+CREATE INDEX IF NOT EXISTS conversation_participants_conversation_id_idx ON conversation_participants (conversation_id);
 
-CREATE INDEX conversation_participants_user_id_idx ON conversation_participants (user_id);
+CREATE INDEX IF NOT EXISTS conversation_participants_user_id_idx ON conversation_participants (user_id);
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID NOT NULL, 
     conversation_id UUID NOT NULL, 
     sender_id UUID NOT NULL, 
@@ -246,11 +257,11 @@ CREATE TABLE messages (
     CONSTRAINT messages_sender_id_fkey FOREIGN KEY(sender_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_messages_conv_created ON messages (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS ix_messages_conv_created ON messages (conversation_id, created_at);
 
-CREATE INDEX messages_conversation_id_idx ON messages (conversation_id);
+CREATE INDEX IF NOT EXISTS messages_conversation_id_idx ON messages (conversation_id);
 
-CREATE INDEX messages_sender_id_idx ON messages (sender_id);
+CREATE INDEX IF NOT EXISTS messages_sender_id_idx ON messages (sender_id);
 
 INSERT INTO alembic_version (version_num) VALUES ('c367a7a8c2ae') RETURNING alembic_version.version_num;
 
@@ -286,17 +297,17 @@ UPDATE alembic_version SET version_num='28fd3bae603e' WHERE alembic_version.vers
 
 -- Running upgrade 28fd3bae603e -> 41e15e8b1d9a
 
-CREATE UNIQUE INDEX uq_transactions_active_listing ON transactions (listing_id) WHERE status IN ('accepted', 'meetup_scheduled');
+CREATE UNIQUE INDEX IF NOT EXISTS uq_transactions_active_listing ON transactions (listing_id) WHERE status IN ('accepted', 'meetup_scheduled');
 
 UPDATE alembic_version SET version_num='41e15e8b1d9a' WHERE alembic_version.version_num = '28fd3bae603e';
 
 -- Running upgrade 41e15e8b1d9a -> 52f26f9c2e0b
 
-CREATE INDEX ix_listings_status_created_at ON listings (status, created_at);
+CREATE INDEX IF NOT EXISTS ix_listings_status_created_at ON listings (status, created_at);
 
-CREATE INDEX ix_listings_status_price ON listings (status, price);
+CREATE INDEX IF NOT EXISTS ix_listings_status_price ON listings (status, price);
 
-CREATE INDEX ix_transactions_listing_status ON transactions (listing_id, status);
+CREATE INDEX IF NOT EXISTS ix_transactions_listing_status ON transactions (listing_id, status);
 
 ALTER TABLE listings ADD CONSTRAINT listings_chk_listings_price_positive_check CHECK (price >= 0);
 
