@@ -53,6 +53,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                         break
                 if settings.FRONTEND_URL and origin.startswith(settings.FRONTEND_URL):
                     valid_origin = True
+                if ".vercel.app" in origin or origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1"):
+                    valid_origin = True
 
             if settings.APP_ENV == "production" and not (has_custom_header or valid_origin):
                 return JSONResponse(

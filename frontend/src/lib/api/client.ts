@@ -64,14 +64,32 @@ class ApiClient {
         let errorMessage = 'An unexpected network error occurred.';
 
         if (error.response?.data) {
-          const detail = error.response.data.detail;
-          if (typeof detail === 'string') {
-            errorMessage = detail;
-          } else if (Array.isArray(detail) && detail.length > 0) {
-            errorMessage = detail.map((d) => d.msg || JSON.stringify(d)).join(', ');
+          const data = error.response.data as any;
+          if (typeof data === 'string') {
+            // HTML error response from Vercel edge/proxy or plain text
+            errorMessage = error.response.statusText || `Request failed with status ${statusCode}`;
+          } else if (typeof data === 'object') {
+            const detail = data.detail || data.message || data.error;
+            if (typeof detail === 'string') {
+              errorMessage = detail;
+            } else if (Array.isArray(detail) && detail.length > 0) {
+              errorMessage = detail
+                .map((d: any) => d.msg || (typeof d === 'string' ? d : JSON.stringify(d)))
+                .join(', ');
+            }
           }
         } else if (error.message) {
           errorMessage = error.message;
+        }
+
+        // Help developers inspect network issues on deployment
+        if (typeof window !== 'undefined') {
+          console.error('[API Error]', {
+            url: error.config?.url,
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message,
+          });
         }
 
         return Promise.reject(new ApiError(errorMessage, statusCode, error.response?.data));
