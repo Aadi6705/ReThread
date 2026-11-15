@@ -1,7 +1,26 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+function getApiBaseUrl(): string {
+  // 1. Server-side in Vercel: use injected internal service binding
+  if (typeof window === 'undefined' && process.env.BACKEND_URL) {
+    return `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/v1`;
+  }
+
+  // 2. Explicit public override
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  // 3. Client-side browser in production (same-domain rewrite to backend service)
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
+  }
+
+  // 4. Default local development fallback
+  return 'http://localhost:8000/api/v1';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface ApiErrorResponse {
   detail: string | { msg: string; type: string }[];
