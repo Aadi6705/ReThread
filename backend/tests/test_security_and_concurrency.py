@@ -291,3 +291,123 @@ async def test_state_machine_completed_exchange_cannot_be_cancelled():
         )
         assert cancel_res.status_code == 400
         assert "Completed exchanges cannot be cancelled" in cancel_res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_idor_protection_across_endpoints():
+    """
+    Verify IDOR (Insecure Direct Object Reference) defenses:
+    A third-party student (User C) must be forbidden (403 or 404) from accessing
+    or modifying a transaction/conversation between User A (Seller) and User B (Buyer).
+    """
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        # 1. Login User A (Seller Rohit) & User B (Buyer Test Student)
+        seller_login = await client.post(
+            "/auth/login",
+            json={"email": "rohit.mehta@iitd.ac.in", "password": "CampusPass123!"},
+        )
+        seller_headers = {"Authorization": f"Bearer {seller_login.json()['access_token']}"}
+
+        buyer_login = await client.post(
+            "/auth/login",
+            json={"email": "test.student@iitd.ac.in", "password": "StrongPassword123!"},
+        )
+        buyer_headers = {"Authorization": f"Bearer {buyer_login.json()['access_token']}"}
+
+        # 2. Register/Login User C (Outsider Student)
+        third_email = "outsider.student@iitd.ac.in"
+        await client.post(
+            "/auth/register",
+            json={
+                "email": third_email,
+                "password": "OutsiderPass123!",
+                "full_name": "Outsider Student",
+            },
+        )
+        outsider_login = await client.post(
+            "/auth/login",
+            json={"email": third_email, "password": "OutsiderPass123!"},
+        )
+        outsider_headers = {"Authorization": f"Bearer {outsider_login.json()['access_token']}"}
+
+        # 3. Create listing and transaction between Seller and Buyer
+        cats_res = await client.get("/categories")
+        cat_id = cats_res.json()[0]["id"]
+        create_res = await client.post(
+            "/seller/listings",
+            headers=seller_headers,
+            json={
+                "category_id": cat_id,
+                "title": "Discrete Mathematics Rosen 7th Ed",
+                "description": "Mint condition book for CS dept.",
+                "price": 550.00,
+                "condition": "like_new",
+                "images": [
+                    {
+                        "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c",
+                        "cloudinary_public_id": "test_discrete_img",
+                        "display_order": 0,
+                    }
+                ],
+                "status": "active",
+            },
+        )
+        listing_id = create_res.json()["id"]
+
+        tx_res = await client.post(
+            "/transactions",
+            headers=buyer_headers,
+            json={"listing_id": listing_id},
+        )
+        tx_id = tx_res.json()["id"]
+
+        # 4. Outsider attempts IDOR attacks:
+        # A) Outsider attempts to view the transaction
+        view_res = await client.get(f"/transactions/{tx_id}", headers=outsider_headers)
+        assert view_res.status_code in (403, 404)
+
+        # B) Outsider attempts to accept the transaction
+        accept_res = await client.post(f"/transactions/{tx_id}/accept", headers=outsider_headers)
+        assert accept_res.status_code == 403
+
+        # C) Outsider attempts to cancel the transaction
+        cancel_res = await client.post(
+            f"/transactions/{tx_id}/cancel",
+            headers=outsider_headers,
+            json={"reason": "Malicious cancel"},
+        )
+        assert cancel_res.status_code == 403
+
+        # D) Outsider attempts to confirm completion
+        confirm_res = await client.post(
+            f"/transactions/{tx_id}/confirm-completion",
+            headers=outsider_headers,
+        )
+        assert confirm_res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_magic_bytes_enforcement():
+    """
+    Verify upload security:
+    Uploading a disguised file (e.g. text/html file renamed to .jpg) must be rejected
+    by deep magic-bytes validation.
+    """
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        seller_login = await client.post(
+            "/auth/login",
+            json={"email": "rohit.mehta@iitd.ac.in", "password": "CampusPass123!"},
+        )
+        headers = {"Authorization": f"Bearer {seller_login.json()['access_token']}"}
+
+        # Fake image file with text/script content
+        fake_content = b"<script>alert('malicious payload')</script>"
+        files = {
+            "file": ("exploit.jpg", fake_content, "image/jpeg")
+        }
+
+        res = await client.post("/uploads/listing-images", headers=headers, files=files)
+        assert res.status_code == 400
+        assert "signature" in res.json()["detail"].lower() or "invalid image" in res.json()["detail"].lower()

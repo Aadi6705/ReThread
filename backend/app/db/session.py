@@ -4,8 +4,13 @@ from app.core.config import settings
 
 # Configure async engine for high-performance and resilient cloud database operations
 connect_args = {}
-# When using PgBouncer / Neon pooled endpoints, statement caching must be disabled:
-if "pooler" in settings.DATABASE_URL or "pgbouncer=true" in settings.DATABASE_URL:
+# When using Supabase pooler (port 6543) or PgBouncer / Neon pooled endpoints, statement caching must be disabled:
+if (
+    "pooler" in settings.DATABASE_URL
+    or ":6543" in settings.DATABASE_URL
+    or "pgbouncer" in settings.DATABASE_URL
+    or "supavisor" in settings.DATABASE_URL
+):
     connect_args["statement_cache_size"] = 0
 
 engine = create_async_engine(

@@ -209,6 +209,22 @@ function MessagesContent() {
     };
   }, [isAuthenticated, user, activeConvId]);
 
+  // Polling fallback when WebSocket is closed or running on serverless Vercel
+  useEffect(() => {
+    if (!isAuthenticated || !activeConvId) return;
+
+    const interval = setInterval(async () => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        try {
+          const detail = await apiClient.get<ConversationDetail>(`/conversations/${activeConvId}`);
+          setActiveDetail(detail);
+        } catch {}
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, activeConvId]);
+
   // Send message handler
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();

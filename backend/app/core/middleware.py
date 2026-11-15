@@ -18,6 +18,51 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class CSRFProtectionMiddleware(BaseHTTPMiddleware):
+    """
+    Guards state-changing requests against CSRF.
+    Enforces Origin/Referer validation and custom anti-CSRF header checks for cookie-authenticated sessions.
+    """
+    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in self.SAFE_METHODS or settings.APP_ENV == "testing":
+            return await call_next(request)
+
+        path = request.url.path
+        if (
+            path.endswith("/auth/login")
+            or path.endswith("/auth/register")
+            or path.endswith("/auth/refresh")
+            or path.endswith("/health")
+        ):
+            return await call_next(request)
+
+        has_session_cookie = bool(request.cookies.get("access_token") or request.cookies.get("refresh_token"))
+        if has_session_cookie:
+            has_custom_header = bool(
+                request.headers.get("X-Requested-With")
+                or request.headers.get("X-CSRF-Token")
+            )
+            origin = request.headers.get("Origin") or request.headers.get("Referer")
+            valid_origin = False
+            if origin:
+                for allowed in settings.ALLOWED_ORIGINS:
+                    if origin.startswith(allowed):
+                        valid_origin = True
+                        break
+                if settings.FRONTEND_URL and origin.startswith(settings.FRONTEND_URL):
+                    valid_origin = True
+
+            if settings.APP_ENV == "production" and not (has_custom_header or valid_origin):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "CSRF validation failed: Missing anti-CSRF header or recognized origin."},
+                )
+
+        return await call_next(request)
+
+
 def get_trusted_client_ip(request: Request) -> str:
     """Extracts client IP respecting Cloudflare and reverse-proxy headers."""
     cf_ip = request.headers.get("CF-Connecting-IP")
@@ -54,7 +99,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "127.0.0.1"
+        client_ip = get_trusted_client_ip(request)
         now = time.time()
         window_start = now - 60.0
 

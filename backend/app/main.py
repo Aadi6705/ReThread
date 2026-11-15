@@ -3,11 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1 import api_router
 
+is_prod = settings.APP_ENV == "production"
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc",
+    openapi_url=None if is_prod else f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if is_prod else f"{settings.API_V1_STR}/docs",
+    redoc_url=None if is_prod else f"{settings.API_V1_STR}/redoc",
 )
 
 # CORS Middleware for Next.js frontend communication
@@ -19,8 +21,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware
+from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware, CSRFProtectionMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFProtectionMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=200, auth_requests_per_minute=40)
 
 # Include API v1 endpoints

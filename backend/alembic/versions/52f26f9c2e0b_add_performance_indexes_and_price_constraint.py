@@ -35,3 +35,4 @@ def downgrade() -> None:
     op.drop_index('ix_transactions_listing_status', table_name='transactions')
     op.drop_index('ix_listings_status_price', table_name='listings')
     op.drop_index('ix_listings_status_created_at', table_name='listings')
+

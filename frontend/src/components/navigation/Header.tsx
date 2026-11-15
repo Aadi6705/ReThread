@@ -94,7 +94,15 @@ function HeaderContent() {
       };
     } catch {}
 
+    // Periodic badge polling fallback when WebSocket is inactive or on serverless Vercel
+    const pollInterval = setInterval(() => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        fetchCounts();
+      }
+    }, 25000);
+
     return () => {
+      clearInterval(pollInterval);
       if (ws) ws.close();
     };
   }, [isAuthenticated, user, pathname]);

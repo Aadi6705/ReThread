@@ -30,6 +30,7 @@ class ApiClient {
       withCredentials: true, // Crucial for HttpOnly session cookies
       headers: {
         'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
       },
     });
 
