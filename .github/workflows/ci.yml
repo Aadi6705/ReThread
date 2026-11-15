@@ -1,0 +1,87 @@
+name: ReThread CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-test:
+    name: Backend Test & Lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rethread_test
+          POSTGRES_PASSWORD: rethread_test_password
+          POSTGRES_DB: rethread_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest-asyncio pytest ruff pip-audit
+
+      - name: Lint with Ruff
+        run: |
+          ruff check backend/app
+
+      - name: Run Pytest Suite
+        env:
+          DATABASE_URL: postgresql+asyncpg://rethread_test:rethread_test_password@localhost:5432/rethread_test_db
+          SYNC_DATABASE_URL: postgresql+psycopg2://rethread_test:rethread_test_password@localhost:5432/rethread_test_db
+          APP_ENV: development
+          SECRET_KEY: test_secret_key_for_ci_pipeline_at_least_32_chars_long
+        run: |
+          cd backend
+          alembic upgrade head
+          PYTHONPATH=. pytest tests/ -v
+
+  frontend-test:
+    name: Frontend Test & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: TypeScript Verification
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+      - name: Run Vitest Unit Tests
+        run: |
+          cd frontend
+          npm test
+

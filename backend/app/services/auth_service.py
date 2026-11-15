@@ -21,6 +21,7 @@ from app.core.security import (
     hash_token,
 )
 from app.integrations.email import send_verification_email, send_password_reset_email
+from app.core.config import settings
 
 
 class AuthService:
@@ -37,6 +38,14 @@ class AuthService:
         college_stmt = select(College).where(College.email_domain == domain)
         college_res = await db.execute(college_stmt)
         college = college_res.scalar_one_or_none()
+
+        if settings.ENFORCE_COLLEGE_EMAIL_WHITELIST:
+            is_allowed_ext = any(domain.endswith(d) for d in settings.COLLEGE_EMAIL_DOMAINS)
+            if not college and not is_allowed_ext:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Registration restricted to recognized campus emails (*.{', *.'.join(settings.COLLEGE_EMAIL_DOMAINS)}).",
+                )
 
         if not college:
             # Fallback to campus demo or first available college

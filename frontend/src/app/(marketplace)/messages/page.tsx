@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
+import { getWebSocketUrl } from '@/lib/ws';
 import { ConversationSummary, ConversationDetail, Message } from '@/types/chat';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -141,7 +142,7 @@ function MessagesContent() {
 
     function connectWs() {
       try {
-        const wsUrl = `ws://127.0.0.1:8000/api/v1/ws`;
+        const wsUrl = getWebSocketUrl();
         ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 

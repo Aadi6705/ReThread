@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from decimal import Decimal
-from sqlalchemy import String, Text, Numeric, Integer, DateTime, ForeignKey, Index
+from sqlalchemy import String, Text, Numeric, Integer, DateTime, ForeignKey, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
@@ -64,6 +64,9 @@ class Listing(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_listings_status_college", "status", "college_id"),
         Index("ix_listings_category_price", "category_id", "price"),
+        Index("ix_listings_status_created_at", "status", "created_at"),
+        Index("ix_listings_status_price", "status", "price"),
+        CheckConstraint("price >= 0", name="chk_listings_price_positive"),
     )
 
 

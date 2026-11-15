@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useModeStore } from '@/store/useModeStore';
 import { ModeSwitcher } from './ModeSwitcher';
 import { apiClient } from '@/lib/api/client';
+import { getWebSocketUrl } from '@/lib/ws';
 import { NotificationItem, UnreadCountResponse } from '@/types/notification';
 import {
   MessageSquare,
@@ -77,7 +78,7 @@ function HeaderContent() {
     // Setup WebSocket listener for real-time notification badge updates
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket('ws://127.0.0.1:8000/api/v1/ws');
+      ws = new WebSocket(getWebSocketUrl());
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);

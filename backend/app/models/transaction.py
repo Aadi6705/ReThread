@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin
@@ -54,4 +54,11 @@ class Transaction(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_transactions_buyer_status", "buyer_id", "status"),
         Index("ix_transactions_seller_status", "seller_id", "status"),
+        Index("ix_transactions_listing_status", "listing_id", "status"),
+        Index(
+            "uq_transactions_active_listing",
+            "listing_id",
+            unique=True,
+            postgresql_where=text("status IN ('accepted', 'meetup_scheduled')"),
+        ),
     )

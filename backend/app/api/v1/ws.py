@@ -2,6 +2,7 @@ import uuid
 import logging
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
+from app.core.config import settings
 from app.core.security import decode_token
 from app.db.session import AsyncSessionLocal
 from app.services.chat_service import ChatService
@@ -11,16 +12,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Real-Time WebSockets"])
 
+MAX_MESSAGE_LENGTH = 2000
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
     token: Optional[str] = Query(None),
 ):
-    # 1. Authenticate user from query parameter token or cookie
+    # 1. Validate Origin header in production to prevent Cross-Site WebSocket Hijacking (CSWSH)
+    origin = websocket.headers.get("origin")
+    if origin and settings.APP_ENV == "production":
+        valid_origins = set(settings.ALLOWED_ORIGINS)
+        if settings.FRONTEND_URL:
+            valid_origins.add(settings.FRONTEND_URL)
+        if origin not in valid_origins:
+            logger.warning(f"WebSocket rejected: Untrusted origin '{origin}'.")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+    # 2. Authenticate user from query parameter token or session cookie
     auth_token = token
     if not auth_token:
-        # Check cookies
         auth_token = websocket.cookies.get("access_token")
 
     if not auth_token:
@@ -41,7 +54,7 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # 2. Connect to manager
+    # 3. Connect to manager
     await manager.connect(websocket, user_id)
 
     # Send initial welcome confirmation
@@ -62,37 +75,41 @@ async def websocket_endpoint(
             elif action == "send_message":
                 conv_id_str = data.get("conversation_id")
                 text = data.get("message", "").strip()
-                if conv_id_str and text:
-                    try:
-                        conv_id = uuid.UUID(conv_id_str)
-                        async with AsyncSessionLocal() as db:
-                            await ChatService.send_message(
-                                db=db,
-                                conversation_id=conv_id,
-                                sender_id=user_id,
-                                message_text=text,
-                            )
-                    except Exception as err:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": str(err)
-                        })
+
+                if not conv_id_str or not text:
+                    continue
+
+                if len(text) > MAX_MESSAGE_LENGTH:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Message exceeds limit of {MAX_MESSAGE_LENGTH} characters."
+                    })
+                    continue
+
+                try:
+                    conv_id = uuid.UUID(conv_id_str)
+                    async with AsyncSessionLocal() as db:
+                        await ChatService.send_message(
+                            db=db,
+                            conversation_id=conv_id,
+                            sender_id=user_id,
+                            message_text=text,
+                        )
+                except Exception as err:
+                    logger.error(f"WebSocket send_message error for user {user_id}: {err}", exc_info=True)
+                    # Sanitized error message to prevent database details leaking
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Failed to deliver message. Please verify you are a member of this chat."
+                    })
 
             elif action == "typing":
-                conv_id_str = data.get("conversation_id")
-                is_typing = bool(data.get("is_typing", True))
-                # Forward typing event to conversation participants
-                if conv_id_str:
-                    try:
-                        conv_id = uuid.UUID(conv_id_str)
-                        # Broadcast typing event
-                        # We can send to manager with type "user_typing"
-                        pass
-                    except Exception:
-                        pass
+                # Client typing events can be broadcast to active peers
+                pass
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
+        logger.info(f"WebSocket disconnected for user {user_id}")
     except Exception as e:
-        logger.warning(f"WebSocket error for user {user_id}: {e}")
         manager.disconnect(websocket, user_id)
+        logger.warning(f"WebSocket connection closed unexpectedly for user {user_id}: {e}")
