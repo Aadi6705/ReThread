@@ -1,23 +1,27 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 
 function getApiBaseUrl(): string {
-  // 1. Server-side in Vercel: use injected internal service binding
-  if (typeof window === 'undefined' && process.env.BACKEND_URL) {
-    return `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/v1`;
-  }
-
-  // 2. Explicit public override
+  // 1. Explicit public override (highest priority)
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
 
-  // 3. Client-side browser in production (same-domain rewrite to backend service)
-  if (typeof window !== 'undefined') {
-    return '/api/v1';
+  // 2. Server-side in Vercel: use injected internal service binding
+  if (typeof window === 'undefined') {
+    if (process.env.BACKEND_URL) {
+      return `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/v1`;
+    }
+    return 'http://127.0.0.1:8000/api/v1';
   }
 
-  // 4. Default local development fallback
-  return 'http://localhost:8000/api/v1';
+  // 3. Browser in local development (localhost / 127.0.0.1): connect directly to FastAPI server
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return 'http://127.0.0.1:8000/api/v1';
+  }
+
+  // 4. Browser in production on Vercel: use same-domain relative path routed by Vercel Services
+  return '/api/v1';
 }
 
 const API_BASE_URL = getApiBaseUrl();
