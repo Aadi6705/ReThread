@@ -1,15 +1,20 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 
 function getApiBaseUrl(): string {
-  // 1. Explicit public override (highest priority)
+  // 1. Explicit public override (e.g. Railway backend URL configured on Vercel)
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+    const url = process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    if (url.endsWith('/api/v1') || url.endsWith('/v1')) {
+      return url;
+    }
+    return `${url}/api/v1`;
   }
 
-  // 2. Server-side in Vercel: use injected internal service binding
+  // 2. Server-side rendering fallback
   if (typeof window === 'undefined') {
-    if (process.env.BACKEND_URL) {
-      return `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/v1`;
+    if (process.env.BACKEND_API_URL || process.env.BACKEND_URL) {
+      const backend = (process.env.BACKEND_API_URL || process.env.BACKEND_URL)!.replace(/\/$/, '');
+      return backend.endsWith('/api/v1') ? backend : `${backend}/api/v1`;
     }
     return 'http://127.0.0.1:8000/api/v1';
   }
@@ -20,7 +25,7 @@ function getApiBaseUrl(): string {
     return 'http://127.0.0.1:8000/api/v1';
   }
 
-  // 4. Browser in production on Vercel: use same-domain relative path routed by Vercel Services
+  // 4. Browser in production on Vercel: use same-domain relative path (proxied by Next.js rewrites)
   return '/api/v1';
 }
 
@@ -55,6 +60,20 @@ class ApiClient {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
       },
+    });
+
+    // Request interceptor: attach Bearer token and handle FormData boundary
+    this.instance.interceptors.request.use((config) => {
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('rethread_access_token');
+        if (token && !config.headers.Authorization) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+        delete config.headers['Content-Type'];
+      }
+      return config;
     });
 
     this.instance.interceptors.response.use(

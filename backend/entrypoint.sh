@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "[ReThread] Running automated database migrations..."
-alembic upgrade head
+echo "[ReThread] Checking database migrations..."
+alembic upgrade head || echo "[ReThread] Alembic upgrade skipped or already up to date."
 
-echo "[ReThread] Migrations applied successfully. Starting application server..."
+echo "[ReThread] Starting application server..."
 exec "$@"

@@ -18,6 +18,9 @@ export function useAuth() {
       setUser(currentUser);
       return currentUser;
     } catch {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('rethread_access_token');
+      }
       clearAuth();
       return null;
     } finally {
@@ -35,6 +38,9 @@ export function useAuth() {
       email,
       password,
     });
+    if (typeof window !== 'undefined' && data.access_token) {
+      localStorage.setItem('rethread_access_token', data.access_token);
+    }
     setUser(data.user);
     return data.user;
   };
@@ -55,6 +61,9 @@ export function useAuth() {
     try {
       await apiClient.post('/auth/logout');
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('rethread_access_token');
+      }
       clearAuth();
       router.push('/login');
     }

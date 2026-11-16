@@ -1,8 +1,9 @@
+import json
 import logging
 import secrets
-from typing import List
+from typing import List, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 logger = logging.getLogger("rethread.config")
 
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"  # development, staging, production
     PROJECT_NAME: str = "ReThread Backend API"
     API_V1_STR: str = "/api/v1"
+    PORT: int = 8000
 
     # Security
     SECRET_KEY: str = DEV_SECRET_KEY
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
 
     # CORS & Domain
     FRONTEND_URL: str = "http://localhost:3000"
-    ALLOWED_ORIGINS: List[str] = [
+    ALLOWED_ORIGINS: Union[List[str], str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000"
     ]
@@ -40,7 +42,20 @@ class Settings(BaseSettings):
 
     # Campus Email Configuration (permits any standard email by default for student accessibility)
     ENFORCE_COLLEGE_EMAIL_WHITELIST: bool = False
-    COLLEGE_EMAIL_DOMAINS: List[str] = ["ac.in", "edu", "gmail.com", "outlook.com", "yahoo.com"]
+    COLLEGE_EMAIL_DOMAINS: Union[List[str], str] = ["ac.in", "edu", "gmail.com", "outlook.com", "yahoo.com"]
+
+    @field_validator("ALLOWED_ORIGINS", "COLLEGE_EMAIL_DOMAINS", mode="before")
+    @classmethod
+    def parse_comma_separated(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
 
     # Cloudinary
     CLOUDINARY_CLOUD_NAME: str = "rethread-dev"

@@ -26,7 +26,13 @@ async def websocket_endpoint(
         valid_origins = set(settings.ALLOWED_ORIGINS)
         if settings.FRONTEND_URL:
             valid_origins.add(settings.FRONTEND_URL)
-        if origin not in valid_origins:
+        is_allowed = (
+            origin in valid_origins
+            or origin.endswith(".vercel.app")
+            or "localhost" in origin
+            or "127.0.0.1" in origin
+        )
+        if not is_allowed:
             logger.warning(f"WebSocket rejected: Untrusted origin '{origin}'.")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return

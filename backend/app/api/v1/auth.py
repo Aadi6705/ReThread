@@ -20,15 +20,16 @@ from app.services.auth_service import AuthService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 COOKIE_SECURE = settings.APP_ENV != "development"
+COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
 
 
 def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
-    """Set secure HttpOnly cookies for session management."""
+    """Set secure HttpOnly cookies for session management (cross-site compatible for Vercel + Railway)."""
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         secure=COOKIE_SECURE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
@@ -37,7 +38,7 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
         secure=COOKIE_SECURE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/api/v1/auth",
@@ -46,8 +47,8 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
 
 def clear_auth_cookies(response: Response):
     """Clear session cookies upon logout."""
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/api/v1/auth")
+    response.delete_cookie(key="access_token", path="/", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    response.delete_cookie(key="refresh_token", path="/api/v1/auth", samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
 
 
 @router.post(
