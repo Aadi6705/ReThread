@@ -92,7 +92,7 @@ class Settings(BaseSettings):
             db_url += ("&" if "?" in db_url else "?") + "ssl=require"
         self.DATABASE_URL = db_url
 
-        # 2. Normalize SYNC_DATABASE_URL
+        # 2. Normalize SYNC_DATABASE_URL (psycopg2 requires sslmode, not ssl)
         sync_url = self.SYNC_DATABASE_URL
         if "localhost" in sync_url and "localhost" not in self.DATABASE_URL:
             sync_url = self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
@@ -100,6 +100,10 @@ class Settings(BaseSettings):
             sync_url = sync_url.replace("postgres://", "postgresql+psycopg2://", 1)
         elif sync_url.startswith("postgresql://") and "+psycopg2" not in sync_url:
             sync_url = sync_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        if "ssl=require" in sync_url:
+            sync_url = sync_url.replace("ssl=require", "sslmode=require")
+        elif "supabase" in sync_url and "sslmode" not in sync_url:
+            sync_url += ("&" if "?" in sync_url else "?") + "sslmode=require"
         self.SYNC_DATABASE_URL = sync_url
 
         # 3. CORS origins dynamic sync
