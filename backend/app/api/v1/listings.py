@@ -48,6 +48,23 @@ async def get_listings(
         page=page,
         limit=limit,
     )
+
+    # If student's campus returned 0 results and no explicit college filter was passed by client,
+    # fall back to global campus listings so users never encounter a false-empty marketplace
+    if results.total == 0 and college_id is None and active_college_id is not None:
+        results = await ListingService.search_marketplace(
+            db=db,
+            college_id=None,
+            category_slug=category,
+            min_price=min_price,
+            max_price=max_price,
+            condition=condition,
+            query=q,
+            sort=sort,
+            page=page,
+            limit=limit,
+        )
+
     return results
 
 

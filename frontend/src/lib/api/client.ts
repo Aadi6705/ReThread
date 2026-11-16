@@ -1,32 +1,39 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 
 function getApiBaseUrl(): string {
-  // 1. Explicit public override (e.g. Railway backend URL configured on Vercel)
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    const url = process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-    if (url.endsWith('/api/v1') || url.endsWith('/v1')) {
-      return url;
+  // 1. Browser runtime
+  if (typeof window !== 'undefined') {
+    const isHttps = window.location.protocol === 'https:';
+    const host = window.location.hostname;
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+
+    // In local development, connect directly to local FastAPI server
+    if (isLocalhost) {
+      const devUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+      return devUrl.replace(/\/$/, '');
     }
-    return `${url}/api/v1`;
-  }
 
-  // 2. Server-side rendering fallback
-  if (typeof window === 'undefined') {
-    if (process.env.BACKEND_API_URL || process.env.BACKEND_URL) {
-      const backend = (process.env.BACKEND_API_URL || process.env.BACKEND_URL)!.replace(/\/$/, '');
-      return backend.endsWith('/api/v1') ? backend : `${backend}/api/v1`;
+    // In production on HTTPS (e.g. Vercel):
+    // Only use NEXT_PUBLIC_API_URL if it is explicitly an HTTPS endpoint (prevents Mixed Content blocking)
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      const raw = process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+      if (!isHttps || raw.startsWith('https://')) {
+        return raw.endsWith('/api/v1') || raw.endsWith('/v1') ? raw : `${raw}/api/v1`;
+      }
     }
-    return 'http://127.0.0.1:8000/api/v1';
+
+    // Default for deployed browser: use same-domain relative path (proxied by Next.js rewrites)
+    return '/api/v1';
   }
 
-  // 3. Browser in local development (localhost / 127.0.0.1): connect directly to FastAPI server
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return 'http://127.0.0.1:8000/api/v1';
-  }
-
-  // 4. Browser in production on Vercel: use same-domain relative path (proxied by Next.js rewrites)
-  return '/api/v1';
+  // 2. Server-side rendering (Node.js runtime on Vercel / server)
+  const serverBackend =
+    process.env.BACKEND_API_URL ||
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    'https://backend-production-426c301a.up.railway.app';
+  const cleanBackend = serverBackend.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+  return `${cleanBackend}/api/v1`;
 }
 
 const API_BASE_URL = getApiBaseUrl();
