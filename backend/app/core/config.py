@@ -39,6 +39,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000"
     ]
     COOKIE_DOMAIN: str = ""
+    RAILWAY_PUBLIC_DOMAIN: str = ""
 
     # Campus Email Configuration (permits any standard email by default for student accessibility)
     ENFORCE_COLLEGE_EMAIL_WHITELIST: bool = False

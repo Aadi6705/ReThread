@@ -1,7 +1,9 @@
+import os
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.api.v1 import api_router
 
@@ -14,6 +16,11 @@ app = FastAPI(
     docs_url=None if is_prod else f"{settings.API_V1_STR}/docs",
     redoc_url=None if is_prod else f"{settings.API_V1_STR}/redoc",
 )
+
+# Static files for persistent/fallback uploads
+uploads_dir = os.path.join(os.getcwd(), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # CORS Middleware: allow localhost, vercel.app preview/production domains, and any configured origin
 app.add_middleware(

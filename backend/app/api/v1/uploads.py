@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, status
+from fastapi import APIRouter, Depends, UploadFile, File, Request, status
 from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.integrations.cloudinary_service import CloudinaryService
@@ -8,14 +8,15 @@ router = APIRouter(prefix="/uploads", tags=["Uploads & Media"])
 
 @router.post("/listing-images", status_code=status.HTTP_201_CREATED)
 async def upload_listing_image(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Upload and optimize a listing photo via Cloudinary.
+    Upload and optimize a listing photo via Cloudinary or local static uploads.
     Enforces format (JPEG/PNG/WebP) and 5 MB size limit.
     """
-    image_url, public_id = await CloudinaryService.upload_listing_image(file)
+    image_url, public_id = await CloudinaryService.upload_listing_image(file, request=request)
     return {
         "image_url": image_url,
         "cloudinary_public_id": public_id,

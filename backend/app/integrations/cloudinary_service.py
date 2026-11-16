@@ -1,8 +1,8 @@
 import os
 import uuid
 import logging
-from typing import Tuple
-from fastapi import UploadFile, HTTPException, status
+from typing import Tuple, Optional
+from fastapi import UploadFile, HTTPException, Request, status
 import cloudinary
 import cloudinary.uploader
 from app.core.config import settings
@@ -55,9 +55,11 @@ class CloudinaryService:
     @staticmethod
     async def upload_listing_image(
         file: UploadFile,
+        request: Optional[Request] = None,
     ) -> Tuple[str, str]:
         """
         Validate, strip EXIF metadata (protect student privacy), and upload a listing image.
+        Uploads to Cloudinary CDN if credentials exist, otherwise falls back to local static storage.
         Returns: (image_url, cloudinary_public_id)
         """
         # 1. Validate file extension
@@ -87,10 +89,10 @@ class CloudinaryService:
         # 4. Deep magic-bytes validation
         validate_image_magic_bytes(content)
 
-        # 5. Check whether to perform real Cloudinary upload or dev fallback
+        # 5. Check whether to perform real Cloudinary upload or local storage fallback
         is_dev_key = (
-            settings.CLOUDINARY_API_KEY in ("dev_key", "")
-            or settings.CLOUDINARY_CLOUD_NAME in ("rethread-dev", "")
+            settings.CLOUDINARY_API_KEY in ("dev_key", "", "none", None)
+            or settings.CLOUDINARY_CLOUD_NAME in ("rethread-dev", "", "none", None)
         )
 
         public_id = f"rethread_listing_{uuid.uuid4().hex[:12]}"
@@ -110,31 +112,31 @@ class CloudinaryService:
                 )
                 return upload_result["secure_url"], upload_result["public_id"]
             except Exception as exc:
-                logger.error(f"Cloudinary upload failed: {exc}", exc_info=True)
-                if settings.APP_ENV == "production":
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail="Image upload service temporarily unavailable.",
-                    )
-                logger.warning("Falling back to local dev upload storage.")
+                logger.error(f"Cloudinary upload failed: {exc}. Falling back to local static storage.", exc_info=True)
 
-        # Dev Fallback: only permitted outside production
-        if settings.APP_ENV == "production":
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Local storage fallback disabled in production.",
-            )
-
-        local_dir = "/Users/white_w6lf/Desktop/ReThread/frontend/public/uploads"
-        os.makedirs(local_dir, exist_ok=True)
+        # Fallback to local uploads directory served via FastAPI StaticFiles
+        uploads_dir = os.path.join(os.getcwd(), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
         local_filename = f"{public_id}{ext}"
-        local_filepath = os.path.join(local_dir, local_filename)
+        local_filepath = os.path.join(uploads_dir, local_filename)
 
         with open(local_filepath, "wb") as f:
             f.write(content)
 
-        local_url = f"/uploads/{local_filename}"
-        return local_url, public_id
+        # Build public URL for the uploaded photo
+        base = ""
+        railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        if railway_domain:
+            base = f"https://{railway_domain}"
+        elif request and request.headers.get("host"):
+            proto = request.headers.get("x-forwarded-proto", "https" if "railway" in request.headers.get("host", "") else "http")
+            base = f"{proto}://{request.headers.get('host')}"
+        elif settings.FRONTEND_URL and "localhost" not in settings.FRONTEND_URL:
+            base = settings.FRONTEND_URL.rstrip('/')
+
+        image_url = f"{base}/uploads/{local_filename}" if base else f"/uploads/{local_filename}"
+        logger.info(f"Listing photo saved to local uploads: {image_url}")
+        return image_url, public_id
 
     @staticmethod
     async def delete_listing_image(cloudinary_public_id: str) -> bool:
