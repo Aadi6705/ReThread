@@ -22,7 +22,14 @@ uploads_dir = os.path.join(os.getcwd(), "uploads")
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
-# CORS Middleware: allow localhost, vercel.app preview/production domains, and any configured origin
+# 1. Custom Security, CSRF, and Rate Limiting middlewares (inner)
+from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware, CSRFProtectionMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFProtectionMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=200, auth_requests_per_minute=40)
+
+# 2. CORS Middleware added LAST so it is the OUTERMOST wrapper in Starlette's reversed stack.
+# This guarantees that EVERY response (including 400, 401, 403, 429, and 500) has Access-Control-Allow-* headers.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -32,11 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
-
-from app.core.middleware import SecurityHeadersMiddleware, RateLimitMiddleware, CSRFProtectionMiddleware
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(CSRFProtectionMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=200, auth_requests_per_minute=40)
 
 # Include API v1 endpoints under both /api/v1 and /v1 to guarantee routes match
 # regardless of whether Vercel Services preserves or strips the /api prefix

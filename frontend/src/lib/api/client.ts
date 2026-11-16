@@ -1,28 +1,11 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 
 function getApiBaseUrl(): string {
-  // 1. Browser runtime
+  // 1. Browser runtime: ALWAYS use same-origin relative path /api/v1
+  // This proxies seamlessly through Next.js rewrites (configured in next.config.ts)
+  // to Railway in production and to 127.0.0.1:8000 in local dev.
+  // This eliminates cross-origin CORS preflights, third-party cookie blocks, and network mismatch.
   if (typeof window !== 'undefined') {
-    const isHttps = window.location.protocol === 'https:';
-    const host = window.location.hostname;
-    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
-
-    // In local development, connect directly to local FastAPI server
-    if (isLocalhost) {
-      const devUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
-      return devUrl.replace(/\/$/, '');
-    }
-
-    // In production on HTTPS (e.g. Vercel):
-    // Only use NEXT_PUBLIC_API_URL if it is explicitly an HTTPS endpoint (prevents Mixed Content blocking)
-    if (process.env.NEXT_PUBLIC_API_URL) {
-      const raw = process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
-      if (!isHttps || raw.startsWith('https://')) {
-        return raw.endsWith('/api/v1') || raw.endsWith('/v1') ? raw : `${raw}/api/v1`;
-      }
-    }
-
-    // Default for deployed browser: use same-domain relative path (proxied by Next.js rewrites)
     return '/api/v1';
   }
 
@@ -105,7 +88,11 @@ class ApiClient {
             }
           }
         } else if (error.message) {
-          errorMessage = error.message;
+          if (error.message === 'Network Error' || (error as any).code === 'ERR_NETWORK') {
+            errorMessage = 'Unable to reach the campus server. Please check your internet connection or verify credentials.';
+          } else {
+            errorMessage = error.message;
+          }
         }
 
         // Help developers inspect network issues on deployment
