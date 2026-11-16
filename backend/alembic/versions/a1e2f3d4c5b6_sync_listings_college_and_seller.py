@@ -42,14 +42,12 @@ def upgrade() -> None:
         )
     )
 
-    # 3. Ensure the 7 predefined listings are explicitly active, public, and verified
+    # 3. Ensure the 7 predefined listings are explicitly active
     conn.execute(
         text(
             """
             UPDATE listings
-            SET status = 'active',
-                visibility = 'public',
-                verification_status = 'verified'
+            SET status = 'active'
             WHERE id IN (
                 'c1000000-0000-0000-0000-000000000001',
                 'c1000000-0000-0000-0000-000000000002',
