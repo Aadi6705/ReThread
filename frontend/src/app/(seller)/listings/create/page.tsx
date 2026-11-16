@@ -16,7 +16,6 @@ import {
   Loader2,
   Sparkles,
   ShieldCheck,
-  Eye,
   Tag,
 } from 'lucide-react';
 
@@ -31,6 +30,7 @@ export default function CreateListingPage() {
   const { user, isAuthenticated, isLoading } = useAuth();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  const [maxStepReached, setMaxStepReached] = useState<number>(1);
   const [categories, setCategories] = useState<Category[]>([]);
 
   // Step 1: Photos
@@ -48,9 +48,16 @@ export default function CreateListingPage() {
   const [price, setPrice] = useState('');
   const [originalPrice, setOriginalPrice] = useState('');
 
-  // General state
+  // General & Field Error states
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    images?: string;
+    title?: string;
+    category?: string;
+    description?: string;
+    price?: string;
+  }>({});
 
   // Load categories
   useEffect(() => {
@@ -58,7 +65,7 @@ export default function CreateListingPage() {
       try {
         const cats = await apiClient.get<Category[]>('/categories');
         setCategories(cats);
-        if (cats.length > 0) {
+        if (cats.length > 0 && !categoryId) {
           setCategoryId(cats[0].id);
         }
       } catch (err) {
@@ -66,7 +73,7 @@ export default function CreateListingPage() {
       }
     }
     loadCategories();
-  }, []);
+  }, [categoryId]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -79,6 +86,7 @@ export default function CreateListingPage() {
 
     setUploading(true);
     setError(null);
+    setFieldErrors((prev) => ({ ...prev, images: undefined }));
 
     try {
       for (let i = 0; i < files.length; i++) {
@@ -111,12 +119,118 @@ export default function CreateListingPage() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Validation per step
-  const canProceedStep1 = images.length >= 1;
-  const canProceedStep2 = title.trim().length >= 3 && categoryId && description.trim().length >= 10;
-  const canProceedStep3 = parseFloat(price) > 0;
+  // Step 1 Validation
+  const validateStep1 = (): boolean => {
+    if (uploading) {
+      setError('Please wait for photos to finish uploading.');
+      return false;
+    }
+    if (images.length === 0) {
+      setError('Please upload at least 1 photo of your item to proceed.');
+      setFieldErrors({ images: 'At least 1 photo is required.' });
+      return false;
+    }
+    setError(null);
+    setFieldErrors({});
+    return true;
+  };
+
+  // Step 2 Validation
+  const validateStep2 = (): boolean => {
+    const newFieldErrors: typeof fieldErrors = {};
+    const trimmedTitle = title.trim();
+    const trimmedDesc = description.trim();
+
+    if (!trimmedTitle) {
+      newFieldErrors.title = 'Listing title is required.';
+    } else if (trimmedTitle.length < 3) {
+      newFieldErrors.title = 'Title must be at least 3 characters.';
+    }
+
+    if (!categoryId) {
+      newFieldErrors.category = 'Please select a category.';
+    }
+
+    if (!trimmedDesc) {
+      newFieldErrors.description = 'Description is required.';
+    } else if (trimmedDesc.length < 10) {
+      newFieldErrors.description = `Description is too short (${trimmedDesc.length}/10 characters minimum).`;
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setError('Please fill in the required product details before continuing.');
+      return false;
+    }
+
+    setError(null);
+    setFieldErrors({});
+    return true;
+  };
+
+  // Step 3 Validation
+  const validateStep3 = (): boolean => {
+    const newFieldErrors: typeof fieldErrors = {};
+    const p = parseFloat(price);
+
+    if (!price || isNaN(p) || p <= 0) {
+      newFieldErrors.price = 'Please enter a valid price greater than ₹0.';
+    }
+
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setError('Please enter a valid selling price in ₹ INR.');
+      return false;
+    }
+
+    setError(null);
+    setFieldErrors({});
+    return true;
+  };
+
+  // Navigation handlers
+  const handleProceedToDetails = () => {
+    if (validateStep1()) {
+      setCurrentStep(2);
+      setMaxStepReached((prev) => Math.max(prev, 2));
+    }
+  };
+
+  const handleProceedToPricing = () => {
+    if (validateStep2()) {
+      setCurrentStep(3);
+      setMaxStepReached((prev) => Math.max(prev, 3));
+    }
+  };
+
+  const handleProceedToPreview = () => {
+    if (validateStep3()) {
+      setCurrentStep(4);
+      setMaxStepReached((prev) => Math.max(prev, 4));
+    }
+  };
+
+  const handleStepClick = (stepNum: 1 | 2 | 3 | 4) => {
+    if (stepNum === currentStep) return;
+    if (stepNum < currentStep) {
+      // Always allowed to go backward
+      setError(null);
+      setCurrentStep(stepNum);
+      return;
+    }
+    // Going forward requires validating intermediate steps
+    if (stepNum >= 2 && !validateStep1()) return;
+    if (stepNum >= 3 && !validateStep2()) return;
+    if (stepNum >= 4 && !validateStep3()) return;
+
+    setError(null);
+    setCurrentStep(stepNum);
+    setMaxStepReached((prev) => Math.max(prev, stepNum));
+  };
 
   const handleCreateListing = async (status: 'draft' | 'active') => {
+    if (!validateStep1() || !validateStep2() || !validateStep3()) return;
+
     setError(null);
     setSubmitting(true);
 
@@ -149,6 +263,10 @@ export default function CreateListingPage() {
   const discountPercent =
     origNum > priceNum ? Math.round(((origNum - priceNum) / origNum) * 100) : null;
 
+  const isStep2Valid = title.trim().length >= 3 && categoryId && description.trim().length >= 10;
+  const isStep1Valid = images.length >= 1;
+  const isStep3Valid = priceNum > 0;
+
   return (
     <div className="min-h-screen bg-[#f5f3ee] text-[#191c1a] py-10 px-4 sm:px-6">
       <div className="max-w-3xl mx-auto">
@@ -161,28 +279,36 @@ export default function CreateListingPage() {
             List a pre-owned item on campus
           </h1>
 
-          {/* Stepper Progress Bar */}
+          {/* Interactive Stepper Progress Bar */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              { num: 1, label: 'Photos' },
-              { num: 2, label: 'Details' },
-              { num: 3, label: 'Pricing' },
-              { num: 4, label: 'Preview' },
-            ].map((step) => (
-              <div
-                key={step.num}
-                className={`py-2 px-3 rounded-xl border text-center transition ${
-                  currentStep === step.num
-                    ? 'bg-[#1a3a2a] text-white border-[#1a3a2a] shadow-xs'
-                    : currentStep > step.num
-                    ? 'bg-[#e8f0eb] text-[#1a3a2a] border-[#d8e5dc]'
-                    : 'bg-white text-[#8a938c] border-[#e2ded6]'
-                }`}
-              >
-                <div className="text-[10px] font-bold uppercase tracking-wider">Step {step.num}</div>
-                <div className="text-xs font-semibold">{step.label}</div>
-              </div>
-            ))}
+              { num: 1 as const, label: 'Photos' },
+              { num: 2 as const, label: 'Details' },
+              { num: 3 as const, label: 'Pricing' },
+              { num: 4 as const, label: 'Preview' },
+            ].map((step) => {
+              const isCurrent = currentStep === step.num;
+              const isAccessible = step.num <= maxStepReached || step.num < currentStep;
+              return (
+                <button
+                  key={step.num}
+                  type="button"
+                  onClick={() => handleStepClick(step.num)}
+                  className={`py-2 px-3 rounded-xl border text-center transition cursor-pointer text-left w-full ${
+                    isCurrent
+                      ? 'bg-[#1a3a2a] text-white border-[#1a3a2a] shadow-xs'
+                      : isAccessible
+                      ? 'bg-[#e8f0eb] text-[#1a3a2a] border-[#d8e5dc] hover:bg-[#dce9e0]'
+                      : 'bg-white text-[#8a938c] border-[#e2ded6] hover:bg-[#faf9f6]'
+                  }`}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider">
+                    Step {step.num}
+                  </div>
+                  <div className="text-xs font-semibold truncate">{step.label}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -195,7 +321,7 @@ export default function CreateListingPage() {
 
         {/* Wizard Content Card */}
         <div className="bg-white rounded-3xl border border-[#e2ded6] p-6 sm:p-10 shadow-sm">
-          {/* STEP 1: PHOTOS (Design s13) */}
+          {/* STEP 1: PHOTOS */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div>
@@ -209,7 +335,13 @@ export default function CreateListingPage() {
 
               {/* Upload Dropzone */}
               {images.length < 5 && (
-                <label className="border-2 border-dashed border-[#d8e5dc] hover:border-[#1a3a2a] rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition bg-[#fdfdfc]">
+                <label
+                  className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition bg-[#fdfdfc] ${
+                    fieldErrors.images
+                      ? 'border-rose-400 bg-rose-50/20'
+                      : 'border-[#d8e5dc] hover:border-[#1a3a2a]'
+                  }`}
+                >
                   <Upload className="w-8 h-8 text-[#1a3a2a] mb-2" />
                   <span className="text-xs font-semibold text-[#191c1a] mb-1">
                     {uploading ? 'Uploading to campus storage...' : 'Click or drag photos here'}
@@ -226,6 +358,10 @@ export default function CreateListingPage() {
                     disabled={uploading}
                   />
                 </label>
+              )}
+
+              {fieldErrors.images && (
+                <p className="text-xs font-medium text-rose-600">{fieldErrors.images}</p>
               )}
 
               {/* Uploaded Photos Grid */}
@@ -267,9 +403,12 @@ export default function CreateListingPage() {
               <div className="pt-4 border-t border-[#edeae2] flex justify-end">
                 <button
                   type="button"
-                  disabled={!canProceedStep1 || uploading}
-                  onClick={() => setCurrentStep(2)}
-                  className="px-6 py-2.5 rounded-xl bg-[#1a3a2a] hover:bg-[#132c1f] text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-40 transition"
+                  onClick={handleProceedToDetails}
+                  className={`px-6 py-2.5 rounded-xl text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition ${
+                    isStep1Valid
+                      ? 'bg-[#1a3a2a] hover:bg-[#132c1f]'
+                      : 'bg-[#1a3a2a]/70 hover:bg-[#1a3a2a]'
+                  }`}
                 >
                   <span>Continue to Details</span>
                   <ChevronRight className="w-4 h-4" />
@@ -278,7 +417,7 @@ export default function CreateListingPage() {
             </div>
           )}
 
-          {/* STEP 2: DETAILS (Design s14) */}
+          {/* STEP 2: DETAILS */}
           {currentStep === 2 && (
             <div className="space-y-6">
               <div>
@@ -292,17 +431,38 @@ export default function CreateListingPage() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#5c645d] mb-1.5">
-                    Listing Title *
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#5c645d]">
+                      Listing Title *
+                    </label>
+                    <span
+                      className={`text-[11px] ${
+                        title.trim().length >= 3 ? 'text-emerald-700 font-semibold' : 'text-[#8a938c]'
+                      }`}
+                    >
+                      {title.trim().length >= 3 ? '✓ Min 3 chars' : 'Min 3 characters'}
+                    </span>
+                  </div>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Casio fx-991EX ClassWiz Scientific Calculator"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#e2ded6] bg-[#fdfdfc] text-[#191c1a] text-xs focus:outline-none focus:border-[#1a3a2a]"
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (fieldErrors.title) {
+                        setFieldErrors((prev) => ({ ...prev, title: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#fdfdfc] text-[#191c1a] text-sm focus:outline-none transition ${
+                      fieldErrors.title
+                        ? 'border-rose-400 ring-2 ring-rose-100'
+                        : 'border-[#e2ded6] focus:border-[#1a3a2a]'
+                    }`}
                   />
+                  {fieldErrors.title && (
+                    <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.title}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -312,8 +472,17 @@ export default function CreateListingPage() {
                     </label>
                     <select
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl border border-[#e2ded6] bg-[#fdfdfc] text-[#191c1a] text-xs focus:outline-none focus:border-[#1a3a2a]"
+                      onChange={(e) => {
+                        setCategoryId(e.target.value);
+                        if (fieldErrors.category) {
+                          setFieldErrors((prev) => ({ ...prev, category: undefined }));
+                        }
+                      }}
+                      className={`w-full px-3 py-2.5 rounded-xl border bg-[#fdfdfc] text-[#191c1a] text-xs focus:outline-none transition ${
+                        fieldErrors.category
+                          ? 'border-rose-400 ring-2 ring-rose-100'
+                          : 'border-[#e2ded6] focus:border-[#1a3a2a]'
+                      }`}
                     >
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -321,6 +490,9 @@ export default function CreateListingPage() {
                         </option>
                       ))}
                     </select>
+                    {fieldErrors.category && (
+                      <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.category}</p>
+                    )}
                   </div>
 
                   <div>
@@ -366,17 +538,44 @@ export default function CreateListingPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-[#5c645d] mb-1.5">
-                    Full Description * (Min 10 characters)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-[#5c645d]">
+                      Full Description *
+                    </label>
+                    <span
+                      className={`text-[11px] ${
+                        description.trim().length >= 10
+                          ? 'text-emerald-700 font-semibold'
+                          : 'text-[#8a938c]'
+                      }`}
+                    >
+                      {description.trim().length >= 10
+                        ? `✓ ${description.trim().length} chars (valid)`
+                        : `${description.trim().length} / 10 characters minimum`}
+                    </span>
+                  </div>
                   <textarea
                     rows={4}
                     required
                     placeholder="Provide details about semester usage, included cables/accessories, or reasons for selling."
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#e2ded6] bg-[#fdfdfc] text-[#191c1a] text-xs focus:outline-none focus:border-[#1a3a2a]"
+                    onChange={(e) => {
+                      setDescription(e.target.value);
+                      if (fieldErrors.description) {
+                        setFieldErrors((prev) => ({ ...prev, description: undefined }));
+                      }
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl border bg-[#fdfdfc] text-[#191c1a] text-sm focus:outline-none transition ${
+                      fieldErrors.description
+                        ? 'border-rose-400 ring-2 ring-rose-100'
+                        : 'border-[#e2ded6] focus:border-[#1a3a2a]'
+                    }`}
                   />
+                  {fieldErrors.description && (
+                    <p className="mt-1 text-xs font-medium text-rose-600">
+                      {fieldErrors.description}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -391,9 +590,12 @@ export default function CreateListingPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={!canProceedStep2}
-                  onClick={() => setCurrentStep(3)}
-                  className="px-6 py-2.5 rounded-xl bg-[#1a3a2a] hover:bg-[#132c1f] text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-40 transition"
+                  onClick={handleProceedToPricing}
+                  className={`px-6 py-2.5 rounded-xl text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition ${
+                    isStep2Valid
+                      ? 'bg-[#1a3a2a] hover:bg-[#132c1f]'
+                      : 'bg-[#1a3a2a]/70 hover:bg-[#1a3a2a]'
+                  }`}
                 >
                   <span>Continue to Pricing</span>
                   <ChevronRight className="w-4 h-4" />
@@ -402,7 +604,7 @@ export default function CreateListingPage() {
             </div>
           )}
 
-          {/* STEP 3: PRICING (Design s15) */}
+          {/* STEP 3: PRICING */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <div>
@@ -431,10 +633,22 @@ export default function CreateListingPage() {
                         step="1"
                         placeholder="950"
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
-                        className="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-[#e2ded6] bg-[#fdfdfc] text-[#191c1a] text-sm font-bold focus:outline-none focus:border-[#1a3a2a]"
+                        onChange={(e) => {
+                          setPrice(e.target.value);
+                          if (fieldErrors.price) {
+                            setFieldErrors((prev) => ({ ...prev, price: undefined }));
+                          }
+                        }}
+                        className={`w-full pl-8 pr-3.5 py-2.5 rounded-xl border bg-[#fdfdfc] text-[#191c1a] text-sm font-bold focus:outline-none transition ${
+                          fieldErrors.price
+                            ? 'border-rose-400 ring-2 ring-rose-100'
+                            : 'border-[#e2ded6] focus:border-[#1a3a2a]'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.price && (
+                      <p className="mt-1 text-xs font-medium text-rose-600">{fieldErrors.price}</p>
+                    )}
                   </div>
 
                   <div>
@@ -489,9 +703,12 @@ export default function CreateListingPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={!canProceedStep3}
-                  onClick={() => setCurrentStep(4)}
-                  className="px-6 py-2.5 rounded-xl bg-[#1a3a2a] hover:bg-[#132c1f] text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 disabled:opacity-40 transition"
+                  onClick={handleProceedToPreview}
+                  className={`px-6 py-2.5 rounded-xl text-white text-xs font-semibold shadow-sm flex items-center gap-1.5 transition ${
+                    isStep3Valid
+                      ? 'bg-[#1a3a2a] hover:bg-[#132c1f]'
+                      : 'bg-[#1a3a2a]/70 hover:bg-[#1a3a2a]'
+                  }`}
                 >
                   <span>Preview Listing</span>
                   <ChevronRight className="w-4 h-4" />

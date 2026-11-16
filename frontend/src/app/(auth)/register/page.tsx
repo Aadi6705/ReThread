@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { ShieldCheck, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
@@ -215,12 +216,12 @@ export default function RegisterPage() {
           <div className="mt-6 pt-6 border-t border-[#edeae2] text-center">
             <p className="text-xs text-[#5c645d]">
               Already registered?{' '}
-              <a
+              <Link
                 href="/login"
                 className="font-bold text-[#1a3a2a] hover:underline"
               >
                 Log in to campus
-              </a>
+              </Link>
             </p>
           </div>
         </div>

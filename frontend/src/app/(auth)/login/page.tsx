@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/navigation';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { ShieldCheck, Eye, EyeOff, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
@@ -141,12 +141,12 @@ export default function LoginPage() {
           <div className="mt-6 pt-6 border-t border-[#edeae2] text-center">
             <p className="text-xs text-[#5c645d]">
               New student to ReThread?{' '}
-              <a
+              <Link
                 href="/register"
                 className="font-bold text-[#1a3a2a] hover:underline"
               >
                 Register with college email
-              </a>
+              </Link>
             </p>
           </div>
         </div>
